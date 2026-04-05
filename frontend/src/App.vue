@@ -11,6 +11,7 @@ const menus = [
   { label: "价格走势", path: "/charts" },
   { label: "AI建议", path: "/ai-advice" },
   { label: "持仓管理", path: "/holdings" },
+  { label: "系统设置", path: "/settings" },
 ];
 
 const title = computed(() => menus.find((item) => item.path === route.path)?.label ?? "行情系统");

@@ -35,6 +35,12 @@ body {
   font-size: 13px;
 }
 
+.subline {
+  margin: 0;
+  color: #64748b;
+  font-size: 13px;
+}
+
 .nav {
   display: flex;
   gap: 8px;

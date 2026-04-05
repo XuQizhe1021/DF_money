@@ -80,6 +80,12 @@ class Database:
                     updated_at TEXT NOT NULL DEFAULT (datetime('now'))
                 );
 
+                CREATE TABLE IF NOT EXISTS data_source_config (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+                );
+
                 CREATE TABLE IF NOT EXISTS price_alert_events (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     holding_id INTEGER NOT NULL,
@@ -392,6 +398,37 @@ class Database:
                 )
         return self.get_alert_config()
 
+    def get_data_source_config(self) -> dict[str, Any]:
+        defaults: dict[str, Any] = {
+            "api_base_url": "",
+            "api_ammo_endpoint": "",
+            "openid": "",
+            "access_token": "",
+        }
+        with self.connection() as conn:
+            rows = conn.execute("SELECT key, value FROM data_source_config;").fetchall()
+        for row in rows:
+            key = str(row["key"])
+            if key in defaults:
+                defaults[key] = str(row["value"])
+        return defaults
+
+    def set_data_source_config(self, config: dict[str, Any]) -> dict[str, Any]:
+        with self.connection() as conn:
+            for key, value in config.items():
+                raw = self._to_storage_value(value)
+                conn.execute(
+                    """
+                    INSERT INTO data_source_config(key, value, updated_at)
+                    VALUES(?, ?, datetime('now'))
+                    ON CONFLICT(key) DO UPDATE SET
+                    value = excluded.value,
+                    updated_at = datetime('now');
+                    """,
+                    (key, raw),
+                )
+        return self.get_data_source_config()
+
     def get_latest_alert_event(self, holding_id: int) -> dict | None:
         with self.connection() as conn:
             row = conn.execute(
@@ -568,6 +605,12 @@ class Database:
                 "default_threshold_pct": "0.15",
                 "cooldown_minutes": "30",
                 "console_enabled": "1",
+            },
+            "data_source_config": {
+                "api_base_url": "",
+                "api_ammo_endpoint": "",
+                "openid": "",
+                "access_token": "",
             },
         }
         for table, config in defaults.items():

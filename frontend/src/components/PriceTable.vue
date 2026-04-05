@@ -6,13 +6,41 @@ const props = defineProps<{
   rows: AmmoLatestItem[];
 }>();
 
+const sortBy = defineModel<"price" | "name">("sortBy", { default: "price" });
+const sortOrder = defineModel<"asc" | "desc">("sortOrder", { default: "desc" });
+
 const sortedRows = computed(() => {
-  return [...props.rows].sort((a, b) => b.price - a.price);
+  const rows = [...props.rows];
+  if (sortBy.value === "name") {
+    rows.sort((a, b) => a.name.localeCompare(b.name, "zh-CN"));
+  } else {
+    rows.sort((a, b) => a.price - b.price);
+  }
+  if (sortOrder.value === "desc") {
+    rows.reverse();
+  }
+  return rows;
 });
 </script>
 
 <template>
   <div class="card table-card">
+    <div class="row" style="margin-bottom: 8px; justify-content: flex-end; gap: 8px">
+      <label>
+        排序字段
+        <select v-model="sortBy">
+          <option value="price">按价格</option>
+          <option value="name">按名称</option>
+        </select>
+      </label>
+      <label>
+        排序方向
+        <select v-model="sortOrder">
+          <option value="desc">降序</option>
+          <option value="asc">升序</option>
+        </select>
+      </label>
+    </div>
     <table class="table">
       <thead>
         <tr>

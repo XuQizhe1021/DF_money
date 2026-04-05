@@ -7,6 +7,7 @@ from typing import Any
 import requests
 
 from backend.config import Settings
+from backend.database import Database
 from backend.models import AmmoInfo, PricePoint
 
 
@@ -15,8 +16,9 @@ class FetcherError(Exception):
 
 
 class DataFetcher:
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, db: Database | None = None):
         self.settings = settings
+        self.db = db
 
     def fetch_and_normalize(self) -> tuple[list[AmmoInfo], list[PricePoint]]:
         try:
@@ -48,11 +50,30 @@ class DataFetcher:
         return ammo_records, price_points
 
     def _fetch_remote(self) -> Any:
-        url = f"{self.settings.api_base_url.rstrip('/')}/{self.settings.api_ammo_endpoint.lstrip('/')}"
+        data_source_config = self._resolve_data_source_config()
+        base_url = str(data_source_config.get("api_base_url") or self.settings.api_base_url)
+        endpoint = str(data_source_config.get("api_ammo_endpoint") or self.settings.api_ammo_endpoint)
+        openid = str(data_source_config.get("openid") or "").strip()
+        access_token = str(data_source_config.get("access_token") or "").strip()
+        url = f"{base_url.rstrip('/')}/{endpoint.lstrip('/')}"
+        headers: dict[str, str] = {}
+        params: dict[str, str] = {}
+        if openid:
+            headers["X-OpenId"] = openid
+            params["openid"] = openid
+        if access_token:
+            headers["Authorization"] = f"Bearer {access_token}"
+            headers["X-Access-Token"] = access_token
+            params["access_token"] = access_token
         last_exception: Exception | None = None
         for attempt in range(1, self.settings.request_retries + 1):
             try:
-                response = requests.get(url, timeout=self.settings.request_timeout_seconds)
+                response = requests.get(
+                    url,
+                    timeout=self.settings.request_timeout_seconds,
+                    headers=headers or None,
+                    params=params or None,
+                )
                 if response.status_code >= 500:
                     raise FetcherError(f"远端服务错误: status={response.status_code}")
                 if response.status_code >= 400:
@@ -65,6 +86,11 @@ class DataFetcher:
             if attempt < self.settings.request_retries:
                 time.sleep(self.settings.request_retry_backoff_seconds * attempt)
         raise FetcherError(f"请求失败: {last_exception}")
+
+    def _resolve_data_source_config(self) -> dict[str, str]:
+        if not self.db:
+            return {}
+        return self.db.get_data_source_config()
 
     def _normalize(self, payload: Any, source: str) -> list[dict]:
         if isinstance(payload, dict):

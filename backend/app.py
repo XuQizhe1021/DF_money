@@ -18,6 +18,7 @@ from backend.routes_alerts import alerts_bp
 from backend.routes_analysis import analysis_bp
 from backend.routes_holdings import holdings_bp
 from backend.routes import api_bp
+from backend.routes_settings import settings_bp
 from backend.schemas import ApiError
 from backend.service import IngestionService
 
@@ -32,7 +33,7 @@ def create_app(settings: Settings | None = None) -> Flask:
     logger = _build_logger(settings)
     db = Database(settings.db_path)
     db.init_schema()
-    fetcher = DataFetcher(settings)
+    fetcher = DataFetcher(settings, db=db)
     service = IngestionService(db=db, fetcher=fetcher, logger=logger)
     holding_service = HoldingService(db=db)
     alert_service = AlertService(db=db, logger=logger)
@@ -43,6 +44,7 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.register_blueprint(analysis_bp)
     app.register_blueprint(holdings_bp)
     app.register_blueprint(alerts_bp)
+    app.register_blueprint(settings_bp)
     app.extensions["settings"] = settings
     app.extensions["db"] = db
     app.extensions["ingestion_service"] = service

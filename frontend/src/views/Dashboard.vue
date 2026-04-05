@@ -13,6 +13,8 @@ const changeLoading = ref(false);
 const changeError = ref("");
 const gainers = ref<Array<{ ammoId: string; name: string; pct: number }>>([]);
 const losers = ref<Array<{ ammoId: string; name: string; pct: number }>>([]);
+const tableSortBy = ref<"price" | "name">("price");
+const tableSortOrder = ref<"asc" | "desc">("desc");
 
 const topGain = computed(() => {
   if (!marketStore.latestItems.length) {
@@ -144,6 +146,6 @@ onMounted(async () => {
     <div v-if="marketStore.loadingLatest" class="card">正在加载行情数据...</div>
     <div v-else-if="marketStore.errorLatest" class="card error">{{ marketStore.errorLatest }}</div>
     <div v-else-if="marketStore.latestItems.length === 0" class="card">暂无行情数据</div>
-    <PriceTable v-else :rows="marketStore.latestItems" />
+    <PriceTable v-else v-model:sort-by="tableSortBy" v-model:sort-order="tableSortOrder" :rows="marketStore.latestItems" />
   </section>
 </template>

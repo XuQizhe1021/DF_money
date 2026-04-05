@@ -26,6 +26,11 @@ const router = createRouter({
             name: "holdings",
             component: () => import("../views/Holdings.vue"),
         },
+        {
+            path: "/settings",
+            name: "settings",
+            component: () => import("../views/Settings.vue"),
+        },
     ],
 });
 export default router;

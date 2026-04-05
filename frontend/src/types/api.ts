@@ -62,6 +62,26 @@ export interface AnalysisData {
   result: AnalysisResult;
 }
 
+export interface AnalysisConfigData {
+  enabled: boolean;
+  provider: string;
+  base_url: string;
+  model: string;
+  api_key: string;
+  timeout_seconds: number;
+  max_calls_per_hour: number;
+  cache_ttl_seconds: number;
+}
+
+export interface DataSourceConfigData {
+  api_base_url: string;
+  api_ammo_endpoint: string;
+  openid: string;
+  access_token: string;
+  has_openid: boolean;
+  has_access_token: boolean;
+}
+
 export interface HoldingItem {
   id: number;
   ammo_id: string;

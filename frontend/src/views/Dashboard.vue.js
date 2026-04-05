@@ -11,6 +11,8 @@ const changeLoading = ref(false);
 const changeError = ref("");
 const gainers = ref([]);
 const losers = ref([]);
+const tableSortBy = ref("price");
+const tableSortOrder = ref("desc");
 const topGain = computed(() => {
     if (!marketStore.latestItems.length) {
         return null;
@@ -210,9 +212,13 @@ else {
     /** @type {[typeof PriceTable, ]} */ ;
     // @ts-ignore
     const __VLS_0 = __VLS_asFunctionalComponent(PriceTable, new PriceTable({
+        sortBy: (__VLS_ctx.tableSortBy),
+        sortOrder: (__VLS_ctx.tableSortOrder),
         rows: (__VLS_ctx.marketStore.latestItems),
     }));
     const __VLS_1 = __VLS_0({
+        sortBy: (__VLS_ctx.tableSortBy),
+        sortOrder: (__VLS_ctx.tableSortOrder),
         rows: (__VLS_ctx.marketStore.latestItems),
     }, ...__VLS_functionalComponentArgsRest(__VLS_0));
 }
@@ -246,6 +252,8 @@ const __VLS_self = (await import('vue')).defineComponent({
             changeError: changeError,
             gainers: gainers,
             losers: losers,
+            tableSortBy: tableSortBy,
+            tableSortOrder: tableSortOrder,
             topGain: topGain,
             topLoss: topLoss,
             refresh: refresh,
