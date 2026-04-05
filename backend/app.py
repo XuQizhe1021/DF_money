@@ -5,6 +5,7 @@ import sqlite3
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, jsonify
+from werkzeug.exceptions import HTTPException
 
 from backend.ai_analyzer import AIAnalyzer
 from backend.alert_service import AlertService
@@ -113,6 +114,11 @@ def _register_error_handlers(app: Flask, logger: logging.Logger) -> None:
     @app.errorhandler(sqlite3.IntegrityError)
     def handle_db_integrity(_: sqlite3.IntegrityError) -> tuple:
         return jsonify({"code": "DB_CONFLICT", "message": "数据库约束冲突"}), 409
+
+    @app.errorhandler(HTTPException)
+    def handle_http_exception(exc: HTTPException) -> tuple:
+        # 路由不存在等HTTP异常应返回原始状态码，避免被包装成500误导前端。
+        return jsonify({"code": "NOT_FOUND", "message": exc.description}), exc.code or 500
 
     @app.errorhandler(Exception)
     def handle_unexpected(exc: Exception) -> tuple:
