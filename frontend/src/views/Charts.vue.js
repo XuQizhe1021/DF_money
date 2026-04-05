@@ -5,9 +5,11 @@ import { useNotificationStore } from "../stores/notification";
 const marketStore = useMarketStore();
 const notificationStore = useNotificationStore();
 const chartRef = ref(null);
+const deltaChartRef = ref(null);
 const selectedAmmoId = ref("");
 const selectedDays = ref(7);
 let chart = null;
+let deltaChart = null;
 let refreshTimer = null;
 const ensureChart = async () => {
     await nextTick();
@@ -16,6 +18,9 @@ const ensureChart = async () => {
     }
     if (!chart) {
         chart = echarts.init(chartRef.value);
+    }
+    if (!deltaChart && deltaChartRef.value) {
+        deltaChart = echarts.init(deltaChartRef.value);
     }
 };
 const renderChart = () => {
@@ -43,6 +48,36 @@ const renderChart = () => {
         ],
     }, { lazyUpdate: true });
 };
+const renderDeltaChart = () => {
+    if (!deltaChart) {
+        return;
+    }
+    const labels = [];
+    const deltas = [];
+    for (let idx = 1; idx < marketStore.historyItems.length; idx += 1) {
+        const current = Number(marketStore.historyItems[idx].price);
+        const prev = Number(marketStore.historyItems[idx - 1].price);
+        labels.push(marketStore.historyItems[idx].recorded_at);
+        deltas.push(Number((current - prev).toFixed(4)));
+    }
+    deltaChart.setOption({
+        tooltip: { trigger: "axis" },
+        grid: { left: 40, right: 20, top: 20, bottom: 56 },
+        xAxis: { type: "category", data: labels, axisLabel: { interval: 0, rotate: 20 } },
+        yAxis: { type: "value" },
+        series: [
+            {
+                name: "价格变动",
+                type: "bar",
+                data: deltas,
+                itemStyle: {
+                    color: (params) => (params.value >= 0 ? "#22c55e" : "#ef4444"),
+                    borderRadius: [4, 4, 0, 0],
+                },
+            },
+        ],
+    }, { lazyUpdate: true });
+};
 const refreshHistory = async () => {
     if (!selectedAmmoId.value) {
         return;
@@ -53,6 +88,10 @@ const refreshHistory = async () => {
         return;
     }
     renderChart();
+    renderDeltaChart();
+    if (marketStore.historyItems.length < 2) {
+        notificationStore.push("info", "历史数据点不足2条，走势与涨跌分析会偏弱，连续采集后将自动改善");
+    }
 };
 const scheduleRefresh = () => {
     if (refreshTimer !== null) {
@@ -77,6 +116,7 @@ onMounted(async () => {
 });
 const onResize = () => {
     chart?.resize();
+    deltaChart?.resize();
 };
 onBeforeUnmount(() => {
     if (refreshTimer !== null) {
@@ -85,7 +125,9 @@ onBeforeUnmount(() => {
     }
     window.removeEventListener("resize", onResize);
     chart?.dispose();
+    deltaChart?.dispose();
     chart = null;
+    deltaChart = null;
 });
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
@@ -145,11 +187,24 @@ else if (__VLS_ctx.marketStore.historyItems.length === 0) {
     });
 }
 else {
+    if (__VLS_ctx.marketStore.historyItems.length < 2) {
+        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+            ...{ class: "card chart-tip" },
+        });
+    }
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "analytics-grid" },
+    });
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ref: "chartRef",
         ...{ class: "card chart" },
     });
     /** @type {typeof __VLS_ctx.chartRef} */ ;
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ref: "deltaChartRef",
+        ...{ class: "card chart" },
+    });
+    /** @type {typeof __VLS_ctx.deltaChartRef} */ ;
 }
 /** @type {__VLS_StyleScopedClasses['stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
@@ -160,6 +215,11 @@ else {
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['chart-tip']} */ ;
+/** @type {__VLS_StyleScopedClasses['analytics-grid']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['chart']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['chart']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
@@ -167,6 +227,7 @@ const __VLS_self = (await import('vue')).defineComponent({
         return {
             marketStore: marketStore,
             chartRef: chartRef,
+            deltaChartRef: deltaChartRef,
             selectedAmmoId: selectedAmmoId,
             selectedDays: selectedDays,
             refreshHistory: refreshHistory,

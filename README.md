@@ -200,6 +200,11 @@ powershell -ExecutionPolicy Bypass -File .\scripts\build_local.ps1
 - `GET /api/alerts/events?unread_only=true&limit=50&offset=0` 获取页面通知数据
 - `POST /api/alerts/read` 标记提醒已读
 
+### 系统设置（新增）
+
+- `GET /api/settings/data-source` 读取数据源配置（敏感字段脱敏）
+- `PUT /api/settings/data-source` 更新数据源配置（支持 `api_base_url`、`api_ammo_endpoint`、`openid`、`access_token`）
+
 请求示例：
 
 ```json
@@ -246,7 +251,17 @@ python scripts/test_api.py
 - `DB_PATH`：SQLite 文件路径
 - `MOCK_ON_FAILURE`：公开 API 不可用时是否自动回退到 mock 数据源
 
-AI 与提醒配置通过 API 动态管理，默认写入 SQLite 的 `ai_provider_config` 和 `alert_config` 表，无需在日志中输出敏感字段。
+AI、提醒与数据源配置通过 API 动态管理，默认写入 SQLite 的 `ai_provider_config`、`alert_config`、`data_source_config` 表，无需在日志中输出敏感字段。
+
+## 小白用户配置指引
+
+在前端导航进入“系统设置”页面，按步骤完成：
+
+1. 先配置“数据源配置”（接口地址、openid、access_token）
+2. 再配置“智能体配置”（base_url、model、api_key）
+3. 返回“行情看板”点击“刷新行情”验证是否成功
+
+若不配置 openid/access_token，系统会尝试默认公开接口；若公开接口不可用，则按 `MOCK_ON_FAILURE` 回退。
 
 ## 测试
 

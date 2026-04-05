@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { alertsApi } from "../api/modules/alerts";
 import { marketApi } from "../api/modules/market";
+import MarketOverviewCharts from "../components/MarketOverviewCharts.vue";
 import PriceTable from "../components/PriceTable.vue";
 import { useMarketStore } from "../stores/market";
 import { useNotificationStore } from "../stores/notification";
@@ -15,6 +16,16 @@ const gainers = ref<Array<{ ammoId: string; name: string; pct: number }>>([]);
 const losers = ref<Array<{ ammoId: string; name: string; pct: number }>>([]);
 const tableSortBy = ref<"price" | "name">("price");
 const tableSortOrder = ref<"asc" | "desc">("desc");
+const rankingHint = computed(() => {
+  const values = [...gainers.value, ...losers.value].map((item) => Math.abs(item.pct));
+  if (!values.length) {
+    return "暂无可用历史数据";
+  }
+  if (values.every((value) => value < 0.0001)) {
+    return "当前历史样本较少，涨跌幅可能接近0。保持连续采集后将更准确。";
+  }
+  return "";
+});
 
 const topGain = computed(() => {
   if (!marketStore.latestItems.length) {
@@ -142,6 +153,9 @@ onMounted(async () => {
         </p>
       </div>
     </div>
+    <div v-if="rankingHint" class="card">{{ rankingHint }}</div>
+
+    <MarketOverviewCharts v-if="marketStore.latestItems.length > 0" :rows="marketStore.latestItems" />
 
     <div v-if="marketStore.loadingLatest" class="card">正在加载行情数据...</div>
     <div v-else-if="marketStore.errorLatest" class="card error">{{ marketStore.errorLatest }}</div>

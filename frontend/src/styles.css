@@ -1,7 +1,7 @@
 :root {
   font-family: "Segoe UI", "PingFang SC", sans-serif;
   color: #1f2937;
-  background: #f4f6fa;
+  background: linear-gradient(160deg, #f6f9ff 0%, #f3f6fb 45%, #eef6ff 100%);
 }
 
 * {
@@ -19,9 +19,10 @@ body {
 }
 
 .topbar {
-  background: #111827;
+  background: linear-gradient(135deg, #0f172a 0%, #1d4ed8 55%, #0ea5e9 100%);
   color: #fff;
-  padding: 16px 20px;
+  padding: 18px 24px;
+  box-shadow: 0 8px 28px rgba(29, 78, 216, 0.18);
 }
 
 .topbar h1 {
@@ -44,17 +45,24 @@ body {
 .nav {
   display: flex;
   gap: 8px;
-  padding: 12px 20px;
-  background: #fff;
+  padding: 12px 20px 14px;
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
   border-bottom: 1px solid #e5e7eb;
 }
 
 .nav-btn {
-  border: 1px solid #d1d5db;
+  border: 1px solid #dbe4ff;
   background: #fff;
-  padding: 8px 14px;
-  border-radius: 8px;
+  padding: 8px 15px;
+  border-radius: 999px;
   cursor: pointer;
+  transition: all 0.22s ease;
+}
+
+.nav-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(37, 99, 235, 0.16);
 }
 
 .nav-btn.active {
@@ -86,19 +94,26 @@ body {
 }
 
 .card {
-  background: #fff;
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid #e5e7eb;
-  border-radius: 12px;
+  border-radius: 14px;
   padding: 14px;
+  box-shadow: 0 6px 22px rgba(15, 23, 42, 0.06);
 }
 
 .btn {
   border: 1px solid #2563eb;
-  background: #2563eb;
+  background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
   color: #fff;
   padding: 7px 12px;
   border-radius: 8px;
   cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 18px rgba(37, 99, 235, 0.24);
 }
 
 .btn:disabled {
@@ -149,7 +164,23 @@ select {
 }
 
 .chart {
-  height: 420px;
+  height: 380px;
+}
+
+.mini-chart {
+  height: 280px;
+}
+
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.chart-tip {
+  color: #1e40af;
+  border-color: #bfdbfe;
+  background: #eff6ff;
 }
 
 .error,
@@ -218,6 +249,17 @@ select {
   border-radius: 8px;
   border: 1px solid #e5e7eb;
   background: #fff;
+}
+
+@media (max-width: 900px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .chart,
+  .mini-chart {
+    height: 320px;
+  }
 }
 
 .notification-item.error {

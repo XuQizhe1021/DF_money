@@ -1,6 +1,7 @@
 import { computed, onMounted, ref } from "vue";
 import { alertsApi } from "../api/modules/alerts";
 import { marketApi } from "../api/modules/market";
+import MarketOverviewCharts from "../components/MarketOverviewCharts.vue";
 import PriceTable from "../components/PriceTable.vue";
 import { useMarketStore } from "../stores/market";
 import { useNotificationStore } from "../stores/notification";
@@ -13,6 +14,16 @@ const gainers = ref([]);
 const losers = ref([]);
 const tableSortBy = ref("price");
 const tableSortOrder = ref("desc");
+const rankingHint = computed(() => {
+    const values = [...gainers.value, ...losers.value].map((item) => Math.abs(item.pct));
+    if (!values.length) {
+        return "暂无可用历史数据";
+    }
+    if (values.every((value) => value < 0.0001)) {
+        return "当前历史样本较少，涨跌幅可能接近0。保持连续采集后将更准确。";
+    }
+    return "";
+});
 const topGain = computed(() => {
     if (!marketStore.latestItems.length) {
         return null;
@@ -192,6 +203,22 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.losers))) {
     (item.name);
     ((item.pct * 100).toFixed(2));
 }
+if (__VLS_ctx.rankingHint) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "card" },
+    });
+    (__VLS_ctx.rankingHint);
+}
+if (__VLS_ctx.marketStore.latestItems.length > 0) {
+    /** @type {[typeof MarketOverviewCharts, ]} */ ;
+    // @ts-ignore
+    const __VLS_0 = __VLS_asFunctionalComponent(MarketOverviewCharts, new MarketOverviewCharts({
+        rows: (__VLS_ctx.marketStore.latestItems),
+    }));
+    const __VLS_1 = __VLS_0({
+        rows: (__VLS_ctx.marketStore.latestItems),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+}
 if (__VLS_ctx.marketStore.loadingLatest) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
         ...{ class: "card" },
@@ -211,16 +238,16 @@ else if (__VLS_ctx.marketStore.latestItems.length === 0) {
 else {
     /** @type {[typeof PriceTable, ]} */ ;
     // @ts-ignore
-    const __VLS_0 = __VLS_asFunctionalComponent(PriceTable, new PriceTable({
+    const __VLS_3 = __VLS_asFunctionalComponent(PriceTable, new PriceTable({
         sortBy: (__VLS_ctx.tableSortBy),
         sortOrder: (__VLS_ctx.tableSortOrder),
         rows: (__VLS_ctx.marketStore.latestItems),
     }));
-    const __VLS_1 = __VLS_0({
+    const __VLS_4 = __VLS_3({
         sortBy: (__VLS_ctx.tableSortBy),
         sortOrder: (__VLS_ctx.tableSortOrder),
         rows: (__VLS_ctx.marketStore.latestItems),
-    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+    }, ...__VLS_functionalComponentArgsRest(__VLS_3));
 }
 /** @type {__VLS_StyleScopedClasses['stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
@@ -239,12 +266,14 @@ else {
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 var __VLS_dollars;
 const __VLS_self = (await import('vue')).defineComponent({
     setup() {
         return {
+            MarketOverviewCharts: MarketOverviewCharts,
             PriceTable: PriceTable,
             marketStore: marketStore,
             checkingAlerts: checkingAlerts,
@@ -254,6 +283,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             losers: losers,
             tableSortBy: tableSortBy,
             tableSortOrder: tableSortOrder,
+            rankingHint: rankingHint,
             topGain: topGain,
             topLoss: topLoss,
             refresh: refresh,

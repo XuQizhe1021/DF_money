@@ -7,9 +7,11 @@ import { useNotificationStore } from "../stores/notification";
 const marketStore = useMarketStore();
 const notificationStore = useNotificationStore();
 const chartRef = ref<HTMLElement | null>(null);
+const deltaChartRef = ref<HTMLElement | null>(null);
 const selectedAmmoId = ref("");
 const selectedDays = ref<7 | 30>(7);
 let chart: echarts.ECharts | null = null;
+let deltaChart: echarts.ECharts | null = null;
 let refreshTimer: number | null = null;
 
 const ensureChart = async () => {
@@ -19,6 +21,9 @@ const ensureChart = async () => {
   }
   if (!chart) {
     chart = echarts.init(chartRef.value);
+  }
+  if (!deltaChart && deltaChartRef.value) {
+    deltaChart = echarts.init(deltaChartRef.value);
   }
 };
 
@@ -48,6 +53,37 @@ const renderChart = () => {
   }, { lazyUpdate: true });
 };
 
+const renderDeltaChart = () => {
+  if (!deltaChart) {
+    return;
+  }
+  const labels: string[] = [];
+  const deltas: number[] = [];
+  for (let idx = 1; idx < marketStore.historyItems.length; idx += 1) {
+    const current = Number(marketStore.historyItems[idx].price);
+    const prev = Number(marketStore.historyItems[idx - 1].price);
+    labels.push(marketStore.historyItems[idx].recorded_at);
+    deltas.push(Number((current - prev).toFixed(4)));
+  }
+  deltaChart.setOption({
+    tooltip: { trigger: "axis" },
+    grid: { left: 40, right: 20, top: 20, bottom: 56 },
+    xAxis: { type: "category", data: labels, axisLabel: { interval: 0, rotate: 20 } },
+    yAxis: { type: "value" },
+    series: [
+      {
+        name: "价格变动",
+        type: "bar",
+        data: deltas,
+        itemStyle: {
+          color: (params: { value: number }) => (params.value >= 0 ? "#22c55e" : "#ef4444"),
+          borderRadius: [4, 4, 0, 0],
+        },
+      },
+    ],
+  }, { lazyUpdate: true });
+};
+
 const refreshHistory = async () => {
   if (!selectedAmmoId.value) {
     return;
@@ -58,6 +94,10 @@ const refreshHistory = async () => {
     return;
   }
   renderChart();
+  renderDeltaChart();
+  if (marketStore.historyItems.length < 2) {
+    notificationStore.push("info", "历史数据点不足2条，走势与涨跌分析会偏弱，连续采集后将自动改善");
+  }
 };
 
 const scheduleRefresh = () => {
@@ -90,6 +130,7 @@ onMounted(async () => {
 
 const onResize = () => {
   chart?.resize();
+  deltaChart?.resize();
 };
 
 onBeforeUnmount(() => {
@@ -99,7 +140,9 @@ onBeforeUnmount(() => {
   }
   window.removeEventListener("resize", onResize);
   chart?.dispose();
+  deltaChart?.dispose();
   chart = null;
+  deltaChart = null;
 });
 </script>
 
@@ -130,6 +173,14 @@ onBeforeUnmount(() => {
     <div v-if="marketStore.loadingHistory" class="card">历史走势加载中...</div>
     <div v-else-if="marketStore.errorHistory" class="card error">{{ marketStore.errorHistory }}</div>
     <div v-else-if="marketStore.historyItems.length === 0" class="card">暂无走势数据</div>
-    <div v-else ref="chartRef" class="card chart"></div>
+    <template v-else>
+      <div class="card chart-tip" v-if="marketStore.historyItems.length < 2">
+        当前历史样本不足，建议保持系统运行并每天采集，7日后可获得更稳定的趋势判断。
+      </div>
+      <div class="analytics-grid">
+        <div ref="chartRef" class="card chart"></div>
+        <div ref="deltaChartRef" class="card chart"></div>
+      </div>
+    </template>
   </section>
 </template>
