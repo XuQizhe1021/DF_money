@@ -13,4 +13,11 @@ export const settingsApi = {
             data: payload,
         }, { retry: 0 });
     },
+    cleanupHistory(payload) {
+        return request({
+            url: "/api/settings/data-cleanup",
+            method: "POST",
+            data: payload,
+        }, { retry: 0 });
+    },
 };

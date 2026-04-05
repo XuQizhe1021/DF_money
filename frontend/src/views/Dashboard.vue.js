@@ -1,5 +1,6 @@
 import { computed, onMounted, ref } from "vue";
 import { alertsApi } from "../api/modules/alerts";
+import { analysisApi } from "../api/modules/analysis";
 import { marketApi } from "../api/modules/market";
 import MarketOverviewCharts from "../components/MarketOverviewCharts.vue";
 import PriceTable from "../components/PriceTable.vue";
@@ -14,6 +15,9 @@ const gainers = ref([]);
 const losers = ref([]);
 const tableSortBy = ref("price");
 const tableSortOrder = ref("desc");
+const signalLoading = ref(false);
+const confirmingSignal = ref(false);
+const signalEvent = ref(null);
 const rankingHint = computed(() => {
     const values = [...gainers.value, ...losers.value].map((item) => Math.abs(item.pct));
     if (!values.length) {
@@ -95,9 +99,40 @@ const checkAlerts = async () => {
         checkingAlerts.value = false;
     }
 };
+const fetchDailySignal = async () => {
+    signalLoading.value = true;
+    try {
+        const resp = await analysisApi.getLatestDailySignal();
+        signalEvent.value = resp.data;
+    }
+    catch (error) {
+        notificationStore.push("error", error instanceof Error ? error.message : "每日提醒读取失败");
+    }
+    finally {
+        signalLoading.value = false;
+    }
+};
+const confirmDailySignal = async () => {
+    if (!signalEvent.value || confirmingSignal.value) {
+        return;
+    }
+    confirmingSignal.value = true;
+    try {
+        await analysisApi.confirmDailySignal(signalEvent.value.id);
+        signalEvent.value = null;
+        notificationStore.push("success", "已确认每日提醒事件");
+    }
+    catch (error) {
+        notificationStore.push("error", error instanceof Error ? error.message : "确认失败");
+    }
+    finally {
+        confirmingSignal.value = false;
+    }
+};
 onMounted(async () => {
     await refresh();
     await checkAlerts();
+    await fetchDailySignal();
 });
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_ctx = {};
@@ -106,6 +141,36 @@ let __VLS_directives;
 __VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
     ...{ class: "stack" },
 });
+if (__VLS_ctx.signalLoading) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "card" },
+    });
+}
+else if (__VLS_ctx.signalEvent) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "card" },
+        ...{ style: {} },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({
+        ...{ style: {} },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    (__VLS_ctx.signalEvent.title);
+    (__VLS_ctx.signalEvent.level);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ style: {} },
+    });
+    (__VLS_ctx.signalEvent.message_markdown);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "row" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (__VLS_ctx.confirmDailySignal) },
+        ...{ class: "btn danger" },
+        disabled: (__VLS_ctx.confirmingSignal),
+    });
+    (__VLS_ctx.confirmingSignal ? "确认中..." : "我已知晓并确认");
+}
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "row" },
 });
@@ -250,6 +315,11 @@ else {
     }, ...__VLS_functionalComponentArgsRest(__VLS_3));
 }
 /** @type {__VLS_StyleScopedClasses['stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['row']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger']} */ ;
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
@@ -283,11 +353,15 @@ const __VLS_self = (await import('vue')).defineComponent({
             losers: losers,
             tableSortBy: tableSortBy,
             tableSortOrder: tableSortOrder,
+            signalLoading: signalLoading,
+            confirmingSignal: confirmingSignal,
+            signalEvent: signalEvent,
             rankingHint: rankingHint,
             topGain: topGain,
             topLoss: topLoss,
             refresh: refresh,
             checkAlerts: checkAlerts,
+            confirmDailySignal: confirmDailySignal,
         };
     },
 });

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import logging
 import sqlite3
+from datetime import datetime
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from flask import Flask, jsonify
@@ -58,7 +59,16 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.extensions["alert_service"] = alert_service
     app.extensions["ai_analyzer"] = ai_analyzer
     app.extensions["price_monitor"] = price_monitor
-    app.extensions["scheduler"] = _build_scheduler(settings, service, price_monitor, fetch_interval_hours)
+    ai_config = db.get_ai_config()
+    app.extensions["scheduler"] = _build_scheduler(
+        settings,
+        service,
+        price_monitor,
+        ai_analyzer,
+        fetch_interval_hours,
+        bool(ai_config.get("daily_signal_enabled", True)),
+        int(ai_config.get("daily_signal_hour", 20)),
+    )
     _register_error_handlers(app, logger)
     return app
 
@@ -83,11 +93,14 @@ def _build_scheduler(
     settings: Settings,
     service: IngestionService,
     price_monitor: PriceMonitor,
+    ai_analyzer: AIAnalyzer,
     fetch_interval_hours: int,
+    daily_signal_enabled: bool,
+    daily_signal_hour: int,
 ) -> BackgroundScheduler | None:
     if not settings.scheduler_enabled:
         return None
-    scheduler = BackgroundScheduler(timezone="UTC")
+    scheduler = BackgroundScheduler(timezone=datetime.now().astimezone().tzinfo)
     scheduler.add_job(
         service.ingest_once,
         trigger="interval",
@@ -104,6 +117,16 @@ def _build_scheduler(
         max_instances=1,
         replace_existing=True,
     )
+    if daily_signal_enabled:
+        scheduler.add_job(
+            ai_analyzer.run_daily_market_signal,
+            trigger="cron",
+            hour=max(0, min(23, daily_signal_hour)),
+            minute=0,
+            id="daily_market_signal_job",
+            max_instances=1,
+            replace_existing=True,
+        )
     scheduler.start()
     return scheduler
 

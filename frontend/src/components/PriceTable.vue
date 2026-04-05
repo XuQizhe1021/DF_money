@@ -21,6 +21,16 @@ const sortedRows = computed(() => {
   }
   return rows;
 });
+
+const formatLocalTime = (value: string) => {
+  const hasExplicitTimezone = /([zZ]|[+\-]\d{2}:\d{2})$/.test(value);
+  const normalized = hasExplicitTimezone ? value : `${value}Z`;
+  const date = new Date(normalized);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+  return date.toLocaleString("zh-CN", { hour12: false });
+};
 </script>
 
 <template>
@@ -55,7 +65,7 @@ const sortedRows = computed(() => {
           <td>{{ item.id }}</td>
           <td>{{ item.name }}</td>
           <td>{{ item.price.toFixed(2) }}</td>
-          <td>{{ item.recorded_at }}</td>
+          <td>{{ formatLocalTime(item.recorded_at) }}</td>
         </tr>
       </tbody>
     </table>

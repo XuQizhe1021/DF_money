@@ -15,6 +15,15 @@ const sortedRows = computed(() => {
     }
     return rows;
 });
+const formatLocalTime = (value) => {
+    const hasExplicitTimezone = /([zZ]|[+\-]\d{2}:\d{2})$/.test(value);
+    const normalized = hasExplicitTimezone ? value : `${value}Z`;
+    const date = new Date(normalized);
+    if (Number.isNaN(date.getTime())) {
+        return value;
+    }
+    return date.toLocaleString("zh-CN", { hour12: false });
+};
 debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
 const __VLS_defaults = {
     'sortBy': "price",
@@ -72,7 +81,7 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.sortedRows))) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
     (item.price.toFixed(2));
     __VLS_asFunctionalElement(__VLS_intrinsicElements.td, __VLS_intrinsicElements.td)({});
-    (item.recorded_at);
+    (__VLS_ctx.formatLocalTime(item.recorded_at));
 }
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['table-card']} */ ;
@@ -85,6 +94,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             sortBy: sortBy,
             sortOrder: sortOrder,
             sortedRows: sortedRows,
+            formatLocalTime: formatLocalTime,
         };
     },
     __typeEmits: {},

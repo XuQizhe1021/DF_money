@@ -20,4 +20,23 @@ export const analysisApi = {
             data: payload,
         }, { retry: 1 });
     },
+    getLatestDailySignal() {
+        return request({
+            url: "/api/analysis/daily-signal/latest",
+            method: "GET",
+        });
+    },
+    confirmDailySignal(eventId) {
+        return request({
+            url: "/api/analysis/daily-signal/confirm",
+            method: "POST",
+            data: { event_id: eventId },
+        }, { retry: 0 });
+    },
+    runDailySignalNow() {
+        return request({
+            url: "/api/analysis/daily-signal/run",
+            method: "POST",
+        }, { retry: 0 });
+    },
 };

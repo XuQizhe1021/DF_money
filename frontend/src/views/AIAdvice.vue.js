@@ -10,6 +10,27 @@ const result = ref(null);
 const loading = ref(false);
 const error = ref("");
 const canRun = computed(() => !!selectedAmmoId.value && !loading.value);
+const renderMarkdown = (text) => {
+    const source = text || "";
+    const escaped = source
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;");
+    return escaped
+        .replace(/^###\s+(.+)$/gm, "<h4>$1</h4>")
+        .replace(/^##\s+(.+)$/gm, "<h3>$1</h3>")
+        .replace(/^#\s+(.+)$/gm, "<h2>$1</h2>")
+        .replace(/^\-\s+(.+)$/gm, "<li>$1</li>")
+        .replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>")
+        .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+        .replace(/\n{2,}/g, "</p><p>")
+        .replace(/\n/g, "<br>");
+};
+const reasonMarkdownHtml = computed(() => {
+    const markdown = result.value?.result.reason_markdown || result.value?.result.reason || "";
+    const body = renderMarkdown(markdown);
+    return `<div class="markdown-body"><p>${body}</p></div>`;
+});
 const riskClass = computed(() => {
     const level = result.value?.result.risk_level ?? "";
     if (level.includes("高")) {
@@ -130,6 +151,10 @@ else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
     __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
     (__VLS_ctx.result.result.risk_tips.join("；") || "无");
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.strong, __VLS_intrinsicElements.strong)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
+    __VLS_asFunctionalDirective(__VLS_directives.vHtml)(null, { ...__VLS_directiveBindingRestFields, value: (__VLS_ctx.reasonMarkdownHtml) }, null, null);
 }
 /** @type {__VLS_StyleScopedClasses['stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
@@ -153,6 +178,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             loading: loading,
             error: error,
             canRun: canRun,
+            reasonMarkdownHtml: reasonMarkdownHtml,
             riskClass: riskClass,
             runAnalysis: runAnalysis,
         };

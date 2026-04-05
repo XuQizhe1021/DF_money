@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 import { alertsApi } from "../api/modules/alerts";
+import { analysisApi } from "../api/modules/analysis";
 import { marketApi } from "../api/modules/market";
 import MarketOverviewCharts from "../components/MarketOverviewCharts.vue";
 import PriceTable from "../components/PriceTable.vue";
 import { useMarketStore } from "../stores/market";
 import { useNotificationStore } from "../stores/notification";
+import type { DailySignalEventData } from "../types/api";
 
 const marketStore = useMarketStore();
 const notificationStore = useNotificationStore();
@@ -16,6 +18,9 @@ const gainers = ref<Array<{ ammoId: string; name: string; pct: number }>>([]);
 const losers = ref<Array<{ ammoId: string; name: string; pct: number }>>([]);
 const tableSortBy = ref<"price" | "name">("price");
 const tableSortOrder = ref<"asc" | "desc">("desc");
+const signalLoading = ref(false);
+const confirmingSignal = ref(false);
+const signalEvent = ref<DailySignalEventData | null>(null);
 const rankingHint = computed(() => {
   const values = [...gainers.value, ...losers.value].map((item) => Math.abs(item.pct));
   if (!values.length) {
@@ -99,14 +104,55 @@ const checkAlerts = async () => {
   }
 };
 
+const fetchDailySignal = async () => {
+  signalLoading.value = true;
+  try {
+    const resp = await analysisApi.getLatestDailySignal();
+    signalEvent.value = resp.data;
+  } catch (error) {
+    notificationStore.push("error", error instanceof Error ? error.message : "每日提醒读取失败");
+  } finally {
+    signalLoading.value = false;
+  }
+};
+
+const confirmDailySignal = async () => {
+  if (!signalEvent.value || confirmingSignal.value) {
+    return;
+  }
+  confirmingSignal.value = true;
+  try {
+    await analysisApi.confirmDailySignal(signalEvent.value.id);
+    signalEvent.value = null;
+    notificationStore.push("success", "已确认每日提醒事件");
+  } catch (error) {
+    notificationStore.push("error", error instanceof Error ? error.message : "确认失败");
+  } finally {
+    confirmingSignal.value = false;
+  }
+};
+
 onMounted(async () => {
   await refresh();
   await checkAlerts();
+  await fetchDailySignal();
 });
 </script>
 
 <template>
   <section class="stack">
+    <div v-if="signalLoading" class="card">正在读取每日AI提醒...</div>
+    <div v-else-if="signalEvent" class="card" style="border-color: #f59e0b; background: #fffbeb">
+      <h3 style="margin-top: 0">📌 每日AI提醒（置顶，需手动确认）</h3>
+      <p>{{ signalEvent.title }} / 风险等级：{{ signalEvent.level }}</p>
+      <div style="white-space: pre-wrap">{{ signalEvent.message_markdown }}</div>
+      <div class="row">
+        <button class="btn danger" :disabled="confirmingSignal" @click="confirmDailySignal">
+          {{ confirmingSignal ? "确认中..." : "我已知晓并确认" }}
+        </button>
+      </div>
+    </div>
+
     <div class="row">
       <div class="card">
         <h3>价格最高</h3>

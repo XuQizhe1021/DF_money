@@ -9,16 +9,43 @@ const chartRef = ref(null);
 const deltaChartRef = ref(null);
 const selectedAmmoId = ref("");
 const selectedWindowHours = ref(168);
+const fetchGap = ref(0);
 const fetchIntervalHours = ref(1);
 let chart = null;
 let deltaChart = null;
 let refreshTimer = null;
+const parseServerTime = (value) => {
+    const hasExplicitTimezone = /([zZ]|[+\-]\d{2}:\d{2})$/.test(value);
+    const normalized = hasExplicitTimezone ? value : `${value}Z`;
+    return new Date(normalized);
+};
 const toAxisLabel = (value) => {
-    const text = value.replace("T", " ");
-    if (fetchIntervalHours.value <= 6) {
-        return text.slice(5, 16);
+    const parsed = parseServerTime(value);
+    if (Number.isNaN(parsed.getTime())) {
+        return value.replace("T", " ");
     }
-    return text.slice(0, 16);
+    const text = parsed.toLocaleString("zh-CN", { hour12: false });
+    if (fetchIntervalHours.value <= 6) {
+        return text.slice(5, 16).replace("/", "-");
+    }
+    return text.slice(0, 16).replace("/", "-");
+};
+const sampleByFetchGap = (source, gap) => {
+    const normalizedGap = Math.max(0, Math.floor(gap));
+    const stride = normalizedGap + 1;
+    const sorted = [...source].sort((a, b) => parseServerTime(a.recorded_at).getTime() - parseServerTime(b.recorded_at).getTime());
+    if (stride <= 1) {
+        return sorted.map((item) => ({ recorded_at: item.recorded_at, price: Number(item.price) }));
+    }
+    const sampled = [];
+    for (let idx = 0; idx < sorted.length; idx += stride) {
+        sampled.push({ recorded_at: sorted[idx].recorded_at, price: Number(sorted[idx].price) });
+    }
+    const last = sorted[sorted.length - 1];
+    if (last && sampled[sampled.length - 1]?.recorded_at !== last.recorded_at) {
+        sampled.push({ recorded_at: last.recorded_at, price: Number(last.price) });
+    }
+    return sampled;
 };
 const ensureChart = async () => {
     await nextTick();
@@ -36,8 +63,9 @@ const renderChart = () => {
     if (!chart) {
         return;
     }
-    const xData = marketStore.historyItems.map((item) => item.recorded_at);
-    const yData = marketStore.historyItems.map((item) => item.price);
+    const grouped = sampleByFetchGap(marketStore.historyItems, fetchGap.value);
+    const xData = grouped.map((item) => item.recorded_at);
+    const yData = grouped.map((item) => item.price);
     chart.setOption({
         tooltip: { trigger: "axis" },
         grid: { left: 40, right: 20, top: 20, bottom: 50 },
@@ -55,18 +83,20 @@ const renderChart = () => {
                 data: yData,
             },
         ],
+        title: xData.length ? undefined : { text: "暂无走势数据", left: "center", top: "middle", textStyle: { color: "#64748b", fontSize: 14 } },
     }, { lazyUpdate: true });
 };
 const renderDeltaChart = () => {
     if (!deltaChart) {
         return;
     }
+    const grouped = sampleByFetchGap(marketStore.historyItems, fetchGap.value);
     const labels = [];
     const deltas = [];
-    for (let idx = 1; idx < marketStore.historyItems.length; idx += 1) {
-        const current = Number(marketStore.historyItems[idx].price);
-        const prev = Number(marketStore.historyItems[idx - 1].price);
-        labels.push(marketStore.historyItems[idx].recorded_at);
+    for (let idx = 1; idx < grouped.length; idx += 1) {
+        const current = Number(grouped[idx].price);
+        const prev = Number(grouped[idx - 1].price);
+        labels.push(grouped[idx].recorded_at);
         deltas.push(Number((current - prev).toFixed(4)));
     }
     deltaChart.setOption({
@@ -85,31 +115,32 @@ const renderDeltaChart = () => {
                 },
             },
         ],
+        title: labels.length ? undefined : { text: "暂无变动数据", left: "center", top: "middle", textStyle: { color: "#64748b", fontSize: 14 } },
     }, { lazyUpdate: true });
 };
 const refreshHistory = async () => {
     if (!selectedAmmoId.value) {
         return;
     }
+    selectedWindowHours.value = Math.max(1, Math.floor(Number(selectedWindowHours.value) || 1));
+    fetchGap.value = Math.max(0, Math.floor(Number(fetchGap.value) || 0));
     const requestDays = Math.max(1, Math.ceil(selectedWindowHours.value / 24));
     await marketStore.fetchHistory(selectedAmmoId.value, requestDays);
     if (marketStore.errorHistory) {
         notificationStore.push("error", marketStore.errorHistory);
         return;
     }
+    await ensureChart();
     if (marketStore.historyItems.length > 0) {
-        const latestAt = new Date(marketStore.historyItems[marketStore.historyItems.length - 1].recorded_at).getTime();
+        const latestAt = parseServerTime(marketStore.historyItems[marketStore.historyItems.length - 1].recorded_at).getTime();
         const minTime = latestAt - selectedWindowHours.value * 3600000;
         marketStore.historyItems = marketStore.historyItems.filter((item) => {
-            const ts = new Date(item.recorded_at).getTime();
+            const ts = parseServerTime(item.recorded_at).getTime();
             return Number.isFinite(ts) && ts >= minTime;
         });
     }
     renderChart();
     renderDeltaChart();
-    if (marketStore.historyItems.length < 2) {
-        notificationStore.push("info", "历史数据点不足2条，走势与涨跌分析会偏弱，连续采集后将自动改善");
-    }
 };
 const scheduleRefresh = () => {
     if (refreshTimer !== null) {
@@ -122,7 +153,7 @@ const scheduleRefresh = () => {
     }, 180);
 };
 const ammoOptions = computed(() => marketStore.ammoOptions);
-watch(() => [selectedAmmoId.value, selectedWindowHours.value], async () => {
+watch(() => [selectedAmmoId.value, selectedWindowHours.value, fetchGap.value], async () => {
     scheduleRefresh();
 });
 onMounted(async () => {
@@ -130,9 +161,11 @@ onMounted(async () => {
         const dsResp = await settingsApi.getDataSourceConfig();
         fetchIntervalHours.value = Math.max(1, Number(dsResp.data.fetch_interval_hours || 1));
         selectedWindowHours.value = Math.max(24, fetchIntervalHours.value * 24);
+        fetchGap.value = 0;
     }
     catch {
         fetchIntervalHours.value = 1;
+        fetchGap.value = 0;
     }
     await marketStore.fetchLatest();
     selectedAmmoId.value = marketStore.latestItems[0]?.id ?? "";
@@ -181,21 +214,19 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.ammoOptions))) {
     (item.label);
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
-    value: (__VLS_ctx.selectedWindowHours),
+__VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+    type: "number",
+    min: "1",
+    step: "1",
 });
-__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-    value: (24),
+(__VLS_ctx.selectedWindowHours);
+__VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+    type: "number",
+    min: "0",
+    step: "1",
 });
-__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-    value: (72),
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-    value: (168),
-});
-__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-    value: (720),
-});
+(__VLS_ctx.fetchGap);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ onClick: (__VLS_ctx.refreshHistory) },
     ...{ class: "btn" },
@@ -212,11 +243,6 @@ else if (__VLS_ctx.marketStore.errorHistory) {
         ...{ class: "card error" },
     });
     (__VLS_ctx.marketStore.errorHistory);
-}
-else if (__VLS_ctx.marketStore.historyItems.length === 0) {
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "card" },
-    });
 }
 else {
     if (__VLS_ctx.marketStore.historyItems.length < 2) {
@@ -246,7 +272,6 @@ else {
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['error']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
-/** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['chart-tip']} */ ;
 /** @type {__VLS_StyleScopedClasses['analytics-grid']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
@@ -262,6 +287,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             deltaChartRef: deltaChartRef,
             selectedAmmoId: selectedAmmoId,
             selectedWindowHours: selectedWindowHours,
+            fetchGap: fetchGap,
             refreshHistory: refreshHistory,
             ammoOptions: ammoOptions,
         };

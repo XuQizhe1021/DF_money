@@ -38,7 +38,7 @@ export const useMarketStore = defineStore("market", {
       try {
         const resp = await marketApi.getLatest();
         this.latestItems = resp.data.items;
-        this.updatedAt = new Date().toISOString();
+        this.updatedAt = new Date().toLocaleString("zh-CN", { hour12: false });
       } catch (error) {
         this.errorLatest = error instanceof Error ? error.message : "获取行情失败";
       } finally {

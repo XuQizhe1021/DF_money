@@ -53,6 +53,7 @@ export interface AnalysisResult {
   risk_level: string;
   risk_tips: string[];
   reason: string;
+  reason_markdown?: string;
 }
 
 export interface AnalysisData {
@@ -71,6 +72,27 @@ export interface AnalysisConfigData {
   timeout_seconds: number;
   max_calls_per_hour: number;
   cache_ttl_seconds: number;
+  daily_signal_enabled: boolean;
+  daily_signal_hour: number;
+}
+
+export interface DailySignalActionItem {
+  ammo_id: string;
+  name: string;
+  action: "建议加仓" | "建议售出" | "观望";
+  risk_level: "低" | "中" | "高";
+  reason: string;
+}
+
+export interface DailySignalEventData {
+  id: number;
+  title: string;
+  level: "低" | "中" | "高";
+  message_markdown: string;
+  suggested_actions: DailySignalActionItem[];
+  is_confirmed: boolean;
+  created_at: string;
+  confirmed_at?: string | null;
 }
 
 export interface DataSourceConfigData {

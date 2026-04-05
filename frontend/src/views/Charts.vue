@@ -11,17 +11,51 @@ const chartRef = ref<HTMLElement | null>(null);
 const deltaChartRef = ref<HTMLElement | null>(null);
 const selectedAmmoId = ref("");
 const selectedWindowHours = ref(168);
+const fetchGap = ref(0);
 const fetchIntervalHours = ref(1);
 let chart: echarts.ECharts | null = null;
 let deltaChart: echarts.ECharts | null = null;
 let refreshTimer: number | null = null;
 
+const parseServerTime = (value: string) => {
+  const hasExplicitTimezone = /([zZ]|[+\-]\d{2}:\d{2})$/.test(value);
+  const normalized = hasExplicitTimezone ? value : `${value}Z`;
+  return new Date(normalized);
+};
+
 const toAxisLabel = (value: string) => {
-  const text = value.replace("T", " ");
-  if (fetchIntervalHours.value <= 6) {
-    return text.slice(5, 16);
+  const parsed = parseServerTime(value);
+  if (Number.isNaN(parsed.getTime())) {
+    return value.replace("T", " ");
   }
-  return text.slice(0, 16);
+  const text = parsed.toLocaleString("zh-CN", { hour12: false });
+  if (fetchIntervalHours.value <= 6) {
+    return text.slice(5, 16).replace("/", "-");
+  }
+  return text.slice(0, 16).replace("/", "-");
+};
+
+const sampleByFetchGap = (
+  source: Array<{ recorded_at: string; price: number }>,
+  gap: number
+) => {
+  const normalizedGap = Math.max(0, Math.floor(gap));
+  const stride = normalizedGap + 1;
+  const sorted = [...source].sort(
+    (a, b) => parseServerTime(a.recorded_at).getTime() - parseServerTime(b.recorded_at).getTime()
+  );
+  if (stride <= 1) {
+    return sorted.map((item) => ({ recorded_at: item.recorded_at, price: Number(item.price) }));
+  }
+  const sampled: Array<{ recorded_at: string; price: number }> = [];
+  for (let idx = 0; idx < sorted.length; idx += stride) {
+    sampled.push({ recorded_at: sorted[idx].recorded_at, price: Number(sorted[idx].price) });
+  }
+  const last = sorted[sorted.length - 1];
+  if (last && sampled[sampled.length - 1]?.recorded_at !== last.recorded_at) {
+    sampled.push({ recorded_at: last.recorded_at, price: Number(last.price) });
+  }
+  return sampled;
 };
 
 const ensureChart = async () => {
@@ -41,8 +75,9 @@ const renderChart = () => {
   if (!chart) {
     return;
   }
-  const xData = marketStore.historyItems.map((item) => item.recorded_at);
-  const yData = marketStore.historyItems.map((item) => item.price);
+  const grouped = sampleByFetchGap(marketStore.historyItems, fetchGap.value);
+  const xData = grouped.map((item) => item.recorded_at);
+  const yData = grouped.map((item) => item.price);
   chart.setOption({
     tooltip: { trigger: "axis" },
     grid: { left: 40, right: 20, top: 20, bottom: 50 },
@@ -60,6 +95,7 @@ const renderChart = () => {
         data: yData,
       },
     ],
+    title: xData.length ? undefined : { text: "暂无走势数据", left: "center", top: "middle", textStyle: { color: "#64748b", fontSize: 14 } },
   }, { lazyUpdate: true });
 };
 
@@ -67,12 +103,13 @@ const renderDeltaChart = () => {
   if (!deltaChart) {
     return;
   }
+  const grouped = sampleByFetchGap(marketStore.historyItems, fetchGap.value);
   const labels: string[] = [];
   const deltas: number[] = [];
-  for (let idx = 1; idx < marketStore.historyItems.length; idx += 1) {
-    const current = Number(marketStore.historyItems[idx].price);
-    const prev = Number(marketStore.historyItems[idx - 1].price);
-    labels.push(marketStore.historyItems[idx].recorded_at);
+  for (let idx = 1; idx < grouped.length; idx += 1) {
+    const current = Number(grouped[idx].price);
+    const prev = Number(grouped[idx - 1].price);
+    labels.push(grouped[idx].recorded_at);
     deltas.push(Number((current - prev).toFixed(4)));
   }
   deltaChart.setOption({
@@ -91,6 +128,7 @@ const renderDeltaChart = () => {
         },
       },
     ],
+    title: labels.length ? undefined : { text: "暂无变动数据", left: "center", top: "middle", textStyle: { color: "#64748b", fontSize: 14 } },
   }, { lazyUpdate: true });
 };
 
@@ -98,25 +136,27 @@ const refreshHistory = async () => {
   if (!selectedAmmoId.value) {
     return;
   }
+  selectedWindowHours.value = Math.max(1, Math.floor(Number(selectedWindowHours.value) || 1));
+  fetchGap.value = Math.max(0, Math.floor(Number(fetchGap.value) || 0));
   const requestDays = Math.max(1, Math.ceil(selectedWindowHours.value / 24));
   await marketStore.fetchHistory(selectedAmmoId.value, requestDays);
   if (marketStore.errorHistory) {
     notificationStore.push("error", marketStore.errorHistory);
     return;
   }
+  await ensureChart();
   if (marketStore.historyItems.length > 0) {
-    const latestAt = new Date(marketStore.historyItems[marketStore.historyItems.length - 1].recorded_at).getTime();
+    const latestAt = parseServerTime(marketStore.historyItems[marketStore.historyItems.length - 1].recorded_at).getTime();
     const minTime = latestAt - selectedWindowHours.value * 3600_000;
     marketStore.historyItems = marketStore.historyItems.filter((item) => {
-      const ts = new Date(item.recorded_at).getTime();
+      const ts = parseServerTime(item.recorded_at).getTime();
       return Number.isFinite(ts) && ts >= minTime;
     });
   }
   renderChart();
   renderDeltaChart();
-  if (marketStore.historyItems.length < 2) {
-    notificationStore.push("info", "历史数据点不足2条，走势与涨跌分析会偏弱，连续采集后将自动改善");
-  }
+  chart?.resize();
+  deltaChart?.resize();
 };
 
 const scheduleRefresh = () => {
@@ -133,7 +173,7 @@ const scheduleRefresh = () => {
 const ammoOptions = computed(() => marketStore.ammoOptions);
 
 watch(
-  () => [selectedAmmoId.value, selectedWindowHours.value],
+  () => [selectedAmmoId.value, selectedWindowHours.value, fetchGap.value],
   async () => {
     scheduleRefresh();
   }
@@ -144,8 +184,10 @@ onMounted(async () => {
     const dsResp = await settingsApi.getDataSourceConfig();
     fetchIntervalHours.value = Math.max(1, Number(dsResp.data.fetch_interval_hours || 1));
     selectedWindowHours.value = Math.max(24, fetchIntervalHours.value * 24);
+    fetchGap.value = 0;
   } catch {
     fetchIntervalHours.value = 1;
+    fetchGap.value = 0;
   }
   await marketStore.fetchLatest();
   selectedAmmoId.value = marketStore.latestItems[0]?.id ?? "";
@@ -186,12 +228,11 @@ onBeforeUnmount(() => {
       </label>
       <label>
         观察窗口（小时）
-        <select v-model.number="selectedWindowHours">
-          <option :value="24">24小时</option>
-          <option :value="72">72小时</option>
-          <option :value="168">168小时（7天）</option>
-          <option :value="720">720小时（30天）</option>
-        </select>
+        <input v-model.number="selectedWindowHours" type="number" min="1" step="1" />
+      </label>
+      <label>
+        每隔多少次爬取
+        <input v-model.number="fetchGap" type="number" min="0" step="1" />
       </label>
       <button class="btn" :disabled="marketStore.loadingHistory" @click="refreshHistory">
         {{ marketStore.loadingHistory ? "加载中..." : "刷新走势" }}
@@ -200,15 +241,12 @@ onBeforeUnmount(() => {
 
     <div v-if="marketStore.loadingHistory" class="card">历史走势加载中...</div>
     <div v-else-if="marketStore.errorHistory" class="card error">{{ marketStore.errorHistory }}</div>
-    <div v-else-if="marketStore.historyItems.length === 0" class="card">暂无走势数据</div>
-    <template v-else>
-      <div class="card chart-tip" v-if="marketStore.historyItems.length < 2">
-        当前历史样本不足，建议保持系统运行并每天采集，7日后可获得更稳定的趋势判断。
-      </div>
-      <div class="analytics-grid">
-        <div ref="chartRef" class="card chart"></div>
-        <div ref="deltaChartRef" class="card chart"></div>
-      </div>
-    </template>
+    <div v-else-if="marketStore.historyItems.length < 2" class="card chart-tip">
+      当前历史样本不足，建议保持系统运行并每天采集，7日后可获得更稳定的趋势判断。
+    </div>
+    <div class="analytics-grid">
+      <div ref="chartRef" class="card chart"></div>
+      <div ref="deltaChartRef" class="card chart"></div>
+    </div>
   </section>
 </template>

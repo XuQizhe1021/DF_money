@@ -6,6 +6,8 @@ const notificationStore = useNotificationStore();
 const loading = ref(false);
 const saving = ref(false);
 const section = ref("agent");
+const cleanupDate = ref("");
+const cleaning = ref(false);
 const aiForm = reactive({
     enabled: true,
     base_url: "",
@@ -14,6 +16,8 @@ const aiForm = reactive({
     timeout_seconds: 12,
     max_calls_per_hour: 5,
     cache_ttl_seconds: 1800,
+    daily_signal_enabled: true,
+    daily_signal_hour: 20,
 });
 const dsForm = reactive({
     api_base_url: "",
@@ -35,6 +39,8 @@ const loadConfig = async () => {
         aiForm.timeout_seconds = Number(aiResp.data.timeout_seconds || 12);
         aiForm.max_calls_per_hour = Number(aiResp.data.max_calls_per_hour || 5);
         aiForm.cache_ttl_seconds = Number(aiResp.data.cache_ttl_seconds || 1800);
+        aiForm.daily_signal_enabled = !!aiResp.data.daily_signal_enabled;
+        aiForm.daily_signal_hour = Number(aiResp.data.daily_signal_hour ?? 20);
         dsForm.api_base_url = dsResp.data.api_base_url || "";
         dsForm.api_ammo_endpoint = dsResp.data.api_ammo_endpoint || "";
         dsForm.openid = "";
@@ -60,6 +66,8 @@ const saveAgentConfig = async () => {
             timeout_seconds: aiForm.timeout_seconds,
             max_calls_per_hour: aiForm.max_calls_per_hour,
             cache_ttl_seconds: aiForm.cache_ttl_seconds,
+            daily_signal_enabled: aiForm.daily_signal_enabled,
+            daily_signal_hour: aiForm.daily_signal_hour,
             ...(aiForm.api_key ? { api_key: aiForm.api_key } : {}),
         });
         aiForm.api_key = "";
@@ -93,6 +101,20 @@ const saveDataSourceConfig = async () => {
     }
     finally {
         saving.value = false;
+    }
+};
+const cleanupHistory = async (mode) => {
+    cleaning.value = true;
+    try {
+        const payload = mode === "before_date" ? { mode, date: cleanupDate.value } : { mode };
+        const resp = await settingsApi.cleanupHistory(payload);
+        notificationStore.push("success", `历史数据清理完成，删除 ${resp.data.deleted_count} 条`);
+    }
+    catch (error) {
+        notificationStore.push("error", error instanceof Error ? error.message : "历史数据清理失败");
+    }
+    finally {
+        cleaning.value = false;
     }
 };
 onMounted(async () => {
@@ -182,6 +204,66 @@ else if (__VLS_ctx.section === 'datasource') {
         disabled: (__VLS_ctx.saving),
     });
     (__VLS_ctx.saving ? "保存中..." : "保存数据源配置");
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "card stack" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.h4, __VLS_intrinsicElements.h4)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "row" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!!(__VLS_ctx.loading))
+                    return;
+                if (!(__VLS_ctx.section === 'datasource'))
+                    return;
+                __VLS_ctx.cleanupHistory('before_7_days');
+            } },
+        ...{ class: "btn danger" },
+        disabled: (__VLS_ctx.cleaning),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!!(__VLS_ctx.loading))
+                    return;
+                if (!(__VLS_ctx.section === 'datasource'))
+                    return;
+                __VLS_ctx.cleanupHistory('before_30_days');
+            } },
+        ...{ class: "btn danger" },
+        disabled: (__VLS_ctx.cleaning),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!!(__VLS_ctx.loading))
+                    return;
+                if (!(__VLS_ctx.section === 'datasource'))
+                    return;
+                __VLS_ctx.cleanupHistory('before_today');
+            } },
+        ...{ class: "btn danger" },
+        disabled: (__VLS_ctx.cleaning),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "row" },
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        placeholder: "例如：2026-03-01",
+    });
+    (__VLS_ctx.cleanupDate);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+        ...{ onClick: (...[$event]) => {
+                if (!!(__VLS_ctx.loading))
+                    return;
+                if (!(__VLS_ctx.section === 'datasource'))
+                    return;
+                __VLS_ctx.cleanupHistory('before_date');
+            } },
+        ...{ class: "btn danger" },
+        disabled: (__VLS_ctx.cleaning || !__VLS_ctx.cleanupDate),
+    });
 }
 else {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
@@ -244,6 +326,23 @@ else {
         max: "86400",
     });
     (__VLS_ctx.aiForm.cache_ttl_seconds);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
+        value: (__VLS_ctx.aiForm.daily_signal_enabled),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+        value: (true),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+        value: (false),
+    });
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "number",
+        min: "0",
+        max: "23",
+    });
+    (__VLS_ctx.aiForm.daily_signal_hour);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
         ...{ onClick: (__VLS_ctx.saveAgentConfig) },
         ...{ class: "btn" },
@@ -272,6 +371,18 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)(
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger']} */ ;
+/** @type {__VLS_StyleScopedClasses['row']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['danger']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['row']} */ ;
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
@@ -284,10 +395,13 @@ const __VLS_self = (await import('vue')).defineComponent({
             loading: loading,
             saving: saving,
             section: section,
+            cleanupDate: cleanupDate,
+            cleaning: cleaning,
             aiForm: aiForm,
             dsForm: dsForm,
             saveAgentConfig: saveAgentConfig,
             saveDataSourceConfig: saveDataSourceConfig,
+            cleanupHistory: cleanupHistory,
         };
     },
 });

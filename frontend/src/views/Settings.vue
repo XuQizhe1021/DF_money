@@ -8,6 +8,8 @@ const notificationStore = useNotificationStore();
 const loading = ref(false);
 const saving = ref(false);
 const section = ref<"agent" | "datasource">("agent");
+const cleanupDate = ref("");
+const cleaning = ref(false);
 
 const aiForm = reactive({
   enabled: true,
@@ -17,6 +19,8 @@ const aiForm = reactive({
   timeout_seconds: 12,
   max_calls_per_hour: 5,
   cache_ttl_seconds: 1800,
+  daily_signal_enabled: true,
+  daily_signal_hour: 20,
 });
 
 const dsForm = reactive({
@@ -40,6 +44,8 @@ const loadConfig = async () => {
     aiForm.timeout_seconds = Number(aiResp.data.timeout_seconds || 12);
     aiForm.max_calls_per_hour = Number(aiResp.data.max_calls_per_hour || 5);
     aiForm.cache_ttl_seconds = Number(aiResp.data.cache_ttl_seconds || 1800);
+    aiForm.daily_signal_enabled = !!aiResp.data.daily_signal_enabled;
+    aiForm.daily_signal_hour = Number(aiResp.data.daily_signal_hour ?? 20);
     dsForm.api_base_url = dsResp.data.api_base_url || "";
     dsForm.api_ammo_endpoint = dsResp.data.api_ammo_endpoint || "";
     dsForm.openid = "";
@@ -64,6 +70,8 @@ const saveAgentConfig = async () => {
       timeout_seconds: aiForm.timeout_seconds,
       max_calls_per_hour: aiForm.max_calls_per_hour,
       cache_ttl_seconds: aiForm.cache_ttl_seconds,
+      daily_signal_enabled: aiForm.daily_signal_enabled,
+      daily_signal_hour: aiForm.daily_signal_hour,
       ...(aiForm.api_key ? { api_key: aiForm.api_key } : {}),
     });
     aiForm.api_key = "";
@@ -94,6 +102,19 @@ const saveDataSourceConfig = async () => {
     notificationStore.push("error", error instanceof Error ? error.message : "数据源配置保存失败");
   } finally {
     saving.value = false;
+  }
+};
+
+const cleanupHistory = async (mode: "before_7_days" | "before_30_days" | "before_today" | "before_date") => {
+  cleaning.value = true;
+  try {
+    const payload = mode === "before_date" ? { mode, date: cleanupDate.value } : { mode };
+    const resp = await settingsApi.cleanupHistory(payload);
+    notificationStore.push("success", `历史数据清理完成，删除 ${resp.data.deleted_count} 条`);
+  } catch (error) {
+    notificationStore.push("error", error instanceof Error ? error.message : "历史数据清理失败");
+  } finally {
+    cleaning.value = false;
   }
 };
 
@@ -155,6 +176,30 @@ onMounted(async () => {
       <button class="btn" :disabled="saving" @click="saveDataSourceConfig">
         {{ saving ? "保存中..." : "保存数据源配置" }}
       </button>
+      <div class="card stack">
+        <h4>历史数据清理</h4>
+        <p>用于清理旧数据，避免长期累积。清理后不可恢复，请谨慎操作。</p>
+        <div class="row">
+          <button class="btn danger" :disabled="cleaning" @click="cleanupHistory('before_7_days')">
+            清理7天前数据
+          </button>
+          <button class="btn danger" :disabled="cleaning" @click="cleanupHistory('before_30_days')">
+            清理30天前数据
+          </button>
+          <button class="btn danger" :disabled="cleaning" @click="cleanupHistory('before_today')">
+            清理今天前数据
+          </button>
+        </div>
+        <div class="row">
+          <label>
+            自定义日期（YYYY-MM-DD）
+            <input v-model="cleanupDate" placeholder="例如：2026-03-01" />
+          </label>
+          <button class="btn danger" :disabled="cleaning || !cleanupDate" @click="cleanupHistory('before_date')">
+            清理该日期前数据
+          </button>
+        </div>
+      </div>
     </div>
 
     <div v-else class="card stack">
@@ -195,6 +240,17 @@ onMounted(async () => {
         <label>
           缓存秒数
           <input v-model.number="aiForm.cache_ttl_seconds" type="number" min="10" max="86400" />
+        </label>
+        <label>
+          每日提醒开关
+          <select v-model="aiForm.daily_signal_enabled">
+            <option :value="true">开启</option>
+            <option :value="false">关闭</option>
+          </select>
+        </label>
+        <label>
+          每日提醒时间（整点）
+          <input v-model.number="aiForm.daily_signal_hour" type="number" min="0" max="23" />
         </label>
       </div>
       <button class="btn" :disabled="saving" @click="saveAgentConfig">

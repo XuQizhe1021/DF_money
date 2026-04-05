@@ -15,6 +15,27 @@ const loading = ref(false);
 const error = ref("");
 
 const canRun = computed(() => !!selectedAmmoId.value && !loading.value);
+const renderMarkdown = (text: string) => {
+  const source = text || "";
+  const escaped = source
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  return escaped
+    .replace(/^###\s+(.+)$/gm, "<h4>$1</h4>")
+    .replace(/^##\s+(.+)$/gm, "<h3>$1</h3>")
+    .replace(/^#\s+(.+)$/gm, "<h2>$1</h2>")
+    .replace(/^\-\s+(.+)$/gm, "<li>$1</li>")
+    .replace(/(<li>[\s\S]*?<\/li>)/g, "<ul>$1</ul>")
+    .replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+    .replace(/\n{2,}/g, "</p><p>")
+    .replace(/\n/g, "<br>");
+};
+const reasonMarkdownHtml = computed(() => {
+  const markdown = result.value?.result.reason_markdown || result.value?.result.reason || "";
+  const body = renderMarkdown(markdown);
+  return `<div class="markdown-body"><p>${body}</p></div>`;
+});
 const riskClass = computed(() => {
   const level = result.value?.result.risk_level ?? "";
   if (level.includes("高")) {
@@ -93,6 +114,10 @@ onMounted(async () => {
       </p>
       <p><strong>原因：</strong>{{ result.result.reason }}</p>
       <p><strong>风险提示：</strong>{{ result.result.risk_tips.join("；") || "无" }}</p>
+      <div>
+        <strong>分析详情（Markdown）：</strong>
+        <div v-html="reasonMarkdownHtml"></div>
+      </div>
     </div>
   </section>
 </template>

@@ -9,6 +9,11 @@ interface UpdateDataSourcePayload {
   fetch_interval_hours?: number;
 }
 
+interface CleanupDataPayload {
+  mode: "before_7_days" | "before_30_days" | "before_today" | "before_date";
+  date?: string;
+}
+
 export const settingsApi = {
   getDataSourceConfig() {
     return request<ApiResponse<DataSourceConfigData>>({
@@ -21,6 +26,16 @@ export const settingsApi = {
       {
         url: "/api/settings/data-source",
         method: "PUT",
+        data: payload,
+      },
+      { retry: 0 }
+    );
+  },
+  cleanupHistory(payload: CleanupDataPayload) {
+    return request<ApiResponse<{ deleted_count: number; cutoff: string; mode: string }>>(
+      {
+        url: "/api/settings/data-cleanup",
+        method: "POST",
         data: payload,
       },
       { retry: 0 }

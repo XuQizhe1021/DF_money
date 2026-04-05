@@ -1,5 +1,5 @@
 import { request } from "../client";
-import type { AnalysisConfigData, AnalysisData, ApiResponse } from "../../types/api";
+import type { AnalysisConfigData, AnalysisData, ApiResponse, DailySignalEventData } from "../../types/api";
 
 interface RunAnalysisPayload {
   ammo_id: string;
@@ -32,6 +32,31 @@ export const analysisApi = {
         data: payload,
       },
       { retry: 1 }
+    );
+  },
+  getLatestDailySignal() {
+    return request<ApiResponse<DailySignalEventData | null>>({
+      url: "/api/analysis/daily-signal/latest",
+      method: "GET",
+    });
+  },
+  confirmDailySignal(eventId: number) {
+    return request<ApiResponse<{ event_id: number }>>(
+      {
+        url: "/api/analysis/daily-signal/confirm",
+        method: "POST",
+        data: { event_id: eventId },
+      },
+      { retry: 0 }
+    );
+  },
+  runDailySignalNow() {
+    return request<ApiResponse<{ event: DailySignalEventData | null }>>(
+      {
+        url: "/api/analysis/daily-signal/run",
+        method: "POST",
+      },
+      { retry: 0 }
     );
   },
 };

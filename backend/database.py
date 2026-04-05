@@ -99,6 +99,17 @@ class Database:
                     FOREIGN KEY (holding_id) REFERENCES holdings(id) ON DELETE CASCADE
                 );
 
+                CREATE TABLE IF NOT EXISTS ai_signal_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    title TEXT NOT NULL,
+                    level TEXT NOT NULL,
+                    message_markdown TEXT NOT NULL,
+                    suggested_actions TEXT NOT NULL,
+                    is_confirmed INTEGER NOT NULL DEFAULT 0,
+                    created_at TEXT NOT NULL DEFAULT (datetime('now')),
+                    confirmed_at TEXT
+                );
+
                 CREATE INDEX IF NOT EXISTS idx_price_history_ammo_time
                 ON price_history(ammo_id, recorded_at DESC);
 
@@ -110,6 +121,9 @@ class Database:
 
                 CREATE UNIQUE INDEX IF NOT EXISTS idx_alert_events_dedupe_key
                 ON price_alert_events(dedupe_key);
+
+                CREATE INDEX IF NOT EXISTS idx_ai_signal_events_confirmed_time
+                ON ai_signal_events(is_confirmed, created_at DESC);
                 """
             )
             self._ensure_column(conn, "holdings", "threshold_pct", "REAL")
@@ -216,6 +230,21 @@ class Database:
     def get_latest_price_map(self) -> dict[str, float]:
         rows = self.get_latest_prices()
         return {row["id"]: float(row["price"]) for row in rows}
+
+    def get_market_snapshot(self, days: int = 7) -> list[dict[str, Any]]:
+        start = (datetime.now(UTC) - timedelta(days=days)).replace(tzinfo=None, microsecond=0).isoformat()
+        with self.connection() as conn:
+            rows = conn.execute(
+                """
+                SELECT ai.id AS ammo_id, ai.name, ai.caliber, ph.price, ph.recorded_at
+                FROM ammo_info ai
+                JOIN price_history ph ON ph.ammo_id = ai.id
+                WHERE ph.recorded_at >= ?
+                ORDER BY ai.id ASC, ph.recorded_at ASC;
+                """,
+                (start,),
+            ).fetchall()
+            return [dict(row) for row in rows]
 
     def create_holding(
         self,
@@ -331,17 +360,19 @@ class Database:
             "timeout_seconds": 12.0,
             "max_calls_per_hour": 5,
             "cache_ttl_seconds": 1800,
+            "daily_signal_enabled": True,
+            "daily_signal_hour": 20,
         }
         with self.connection() as conn:
             rows = conn.execute("SELECT key, value FROM ai_provider_config;").fetchall()
         for row in rows:
             key = row["key"]
             value = row["value"]
-            if key in {"enabled"}:
+            if key in {"enabled", "daily_signal_enabled"}:
                 defaults[key] = value == "1"
             elif key in {"timeout_seconds"}:
                 defaults[key] = float(value)
-            elif key in {"max_calls_per_hour", "cache_ttl_seconds"}:
+            elif key in {"max_calls_per_hour", "cache_ttl_seconds", "daily_signal_hour"}:
                 defaults[key] = int(value)
             else:
                 defaults[key] = value
@@ -585,6 +616,73 @@ class Database:
             )
             return cursor.rowcount if cursor.rowcount >= 0 else 0
 
+    def delete_price_history_before(self, cutoff_iso: str) -> int:
+        with self.connection() as conn:
+            cursor = conn.execute("DELETE FROM price_history WHERE recorded_at < ?;", (cutoff_iso,))
+            affected = cursor.rowcount if cursor.rowcount >= 0 else 0
+        if affected > 0:
+            self._invalidate_latest_prices_cache()
+        return affected
+
+    def create_ai_signal_event(
+        self,
+        title: str,
+        level: str,
+        message_markdown: str,
+        suggested_actions: list[dict[str, Any]],
+    ) -> dict[str, Any]:
+        with self.connection() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO ai_signal_events(
+                    title, level, message_markdown, suggested_actions, is_confirmed, created_at
+                ) VALUES(?, ?, ?, ?, 0, datetime('now'));
+                """,
+                (title, level, message_markdown, json.dumps(suggested_actions, ensure_ascii=False)),
+            )
+            row = conn.execute(
+                """
+                SELECT id, title, level, message_markdown, suggested_actions, is_confirmed, created_at, confirmed_at
+                FROM ai_signal_events
+                WHERE id = ?;
+                """,
+                (cursor.lastrowid,),
+            ).fetchone()
+        result = dict(row)
+        result["suggested_actions"] = json.loads(str(result["suggested_actions"]) or "[]")
+        result["is_confirmed"] = bool(result["is_confirmed"])
+        return result
+
+    def get_latest_unconfirmed_ai_signal_event(self) -> dict[str, Any] | None:
+        with self.connection() as conn:
+            row = conn.execute(
+                """
+                SELECT id, title, level, message_markdown, suggested_actions, is_confirmed, created_at, confirmed_at
+                FROM ai_signal_events
+                WHERE is_confirmed = 0
+                ORDER BY created_at DESC
+                LIMIT 1;
+                """
+            ).fetchone()
+        if not row:
+            return None
+        result = dict(row)
+        result["suggested_actions"] = json.loads(str(result["suggested_actions"]) or "[]")
+        result["is_confirmed"] = bool(result["is_confirmed"])
+        return result
+
+    def confirm_ai_signal_event(self, event_id: int) -> bool:
+        with self.connection() as conn:
+            cursor = conn.execute(
+                """
+                UPDATE ai_signal_events
+                SET is_confirmed = 1, confirmed_at = datetime('now')
+                WHERE id = ? AND is_confirmed = 0;
+                """,
+                (event_id,),
+            )
+            return cursor.rowcount > 0
+
     @staticmethod
     def _to_storage_value(value: Any) -> str:
         if isinstance(value, bool):
@@ -604,6 +702,8 @@ class Database:
                 "timeout_seconds": "12",
                 "max_calls_per_hour": "5",
                 "cache_ttl_seconds": "1800",
+                "daily_signal_enabled": "1",
+                "daily_signal_hour": "20",
             },
             "alert_config": {
                 "default_threshold_pct": "0.15",
