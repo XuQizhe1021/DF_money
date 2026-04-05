@@ -141,6 +141,8 @@ const refreshHistory = async () => {
     }
     renderChart();
     renderDeltaChart();
+    chart?.resize();
+    deltaChart?.resize();
 };
 const scheduleRefresh = () => {
     if (refreshTimer !== null) {
@@ -244,26 +246,24 @@ else if (__VLS_ctx.marketStore.errorHistory) {
     });
     (__VLS_ctx.marketStore.errorHistory);
 }
-else {
-    if (__VLS_ctx.marketStore.historyItems.length < 2) {
-        __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-            ...{ class: "card chart-tip" },
-        });
-    }
+else if (__VLS_ctx.marketStore.historyItems.length < 2) {
     __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ...{ class: "analytics-grid" },
+        ...{ class: "card chart-tip" },
     });
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ref: "chartRef",
-        ...{ class: "card chart" },
-    });
-    /** @type {typeof __VLS_ctx.chartRef} */ ;
-    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
-        ref: "deltaChartRef",
-        ...{ class: "card chart" },
-    });
-    /** @type {typeof __VLS_ctx.deltaChartRef} */ ;
 }
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "analytics-grid" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ref: "chartRef",
+    ...{ class: "card chart" },
+});
+/** @type {typeof __VLS_ctx.chartRef} */ ;
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ref: "deltaChartRef",
+    ...{ class: "card chart" },
+});
+/** @type {typeof __VLS_ctx.deltaChartRef} */ ;
 /** @type {__VLS_StyleScopedClasses['stack']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
