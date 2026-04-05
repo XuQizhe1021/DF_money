@@ -36,30 +36,18 @@ const loadChangeRanking = async () => {
     changeLoading.value = true;
     changeError.value = "";
     try {
-        const candidates = marketStore.latestItems.slice(0, 12);
-        // 使用并发请求计算7日涨跌幅，限制样本数量保证页面响应。
-        const result = await Promise.all(candidates.map(async (item) => {
-            const resp = await marketApi.getHistory(item.id, 7);
-            const points = resp.data.items;
-            if (points.length < 2) {
-                return null;
-            }
-            const first = Number(points[0].price);
-            const last = Number(points[points.length - 1].price);
-            if (!Number.isFinite(first) || first <= 0) {
-                return null;
-            }
-            return {
-                ammoId: item.id,
-                name: item.name,
-                pct: (last - first) / first,
-            };
+        // 改为后端聚合接口，避免前端N次历史请求导致的瀑布延时和压力放大。
+        const resp = await marketApi.getChangeRanking(7, 3);
+        gainers.value = resp.data.gainers.map((item) => ({
+            ammoId: item.ammo_id,
+            name: item.name,
+            pct: Number(item.pct),
         }));
-        const valid = result
-            .filter((item) => item !== null)
-            .sort((a, b) => b.pct - a.pct);
-        gainers.value = valid.slice(0, 3);
-        losers.value = [...valid].reverse().slice(0, 3);
+        losers.value = resp.data.losers.map((item) => ({
+            ammoId: item.ammo_id,
+            name: item.name,
+            pct: Number(item.pct),
+        }));
     }
     catch (error) {
         changeError.value = error instanceof Error ? error.message : "涨跌幅计算失败";

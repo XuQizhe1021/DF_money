@@ -71,8 +71,8 @@ class AlertService:
             self.logger.warning(message)
         return event
 
-    def list_events(self, limit: int = 50, unread_only: bool = False) -> list[dict[str, Any]]:
-        return self.db.list_alert_events(limit=limit, unread_only=unread_only)
+    def list_events(self, limit: int = 50, unread_only: bool = False, offset: int = 0) -> list[dict[str, Any]]:
+        return self.db.list_alert_events(limit=limit, unread_only=unread_only, offset=offset)
 
     def mark_read(self, event_ids: list[int] | None = None) -> int:
         return self.db.mark_alerts_read(event_ids=event_ids)

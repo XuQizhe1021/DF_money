@@ -29,6 +29,19 @@ def price_history(ammo_id: str) -> tuple:
     return jsonify({"code": "OK", "message": "ok", "data": {"ammo_id": ammo_id, "days": days, "items": rows}}), 200
 
 
+@api_bp.get("/api/ammo/change-ranking")
+def change_ranking() -> tuple:
+    db = current_app.extensions["db"]
+    days = request.args.get("days", default=7, type=int)
+    limit = request.args.get("limit", default=3, type=int)
+    if not days or days < 1 or days > 365:
+        raise ApiError(code="INVALID_PARAM", message="days 必须在 1~365", status_code=422)
+    if not limit or limit < 1 or limit > 20:
+        raise ApiError(code="INVALID_PARAM", message="limit 必须在 1~20", status_code=422)
+    ranking = db.get_change_ranking(days=days, limit=limit)
+    return jsonify({"code": "OK", "message": "ok", "data": {"days": days, "limit": limit, **ranking}}), 200
+
+
 @api_bp.post("/api/tasks/fetch-now")
 def fetch_now() -> tuple:
     service = current_app.extensions["ingestion_service"]

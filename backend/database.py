@@ -5,6 +5,7 @@ import sqlite3
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from threading import Lock
 from typing import Any, Iterator
 
 from backend.models import AmmoInfo, PricePoint
@@ -14,6 +15,8 @@ class Database:
     def __init__(self, db_path: Path):
         self.db_path = db_path
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
+        self._latest_prices_cache: tuple[datetime, list[dict]] | None = None
+        self._latest_prices_cache_lock = Lock()
 
     @contextmanager
     def connection(self) -> Iterator[sqlite3.Connection]:
@@ -124,6 +127,7 @@ class Database:
                 """,
                 [(r.id, r.name, r.grade, r.caliber) for r in records],
             )
+        self._invalidate_latest_prices_cache()
 
     def insert_prices(self, points: list[PricePoint]) -> int:
         if not points:
@@ -144,9 +148,16 @@ class Database:
                     for p in points
                 ],
             )
-            return cursor.rowcount if cursor.rowcount >= 0 else 0
+            affected = cursor.rowcount if cursor.rowcount >= 0 else 0
+        if affected > 0:
+            self._invalidate_latest_prices_cache()
+        return affected
 
     def get_latest_prices(self) -> list[dict]:
+        # 热点接口短TTL缓存：减少高频轮询下的重复SQL压力。
+        cached = self._get_latest_prices_cache(ttl_seconds=5)
+        if cached is not None:
+            return cached
         with self.connection() as conn:
             rows = conn.execute(
                 """
@@ -163,7 +174,9 @@ class Database:
                 ORDER BY ai.name ASC;
                 """
             ).fetchall()
-            return [dict(row) for row in rows]
+            result = [dict(row) for row in rows]
+        self._set_latest_prices_cache(result)
+        return result
 
     def get_history(self, ammo_id: str, days: int) -> list[dict]:
         start = (datetime.now(UTC) - timedelta(days=days)).replace(tzinfo=None, microsecond=0).isoformat()
@@ -227,6 +240,11 @@ class Database:
             return dict(row)
 
     def list_holdings(self, status: str | None = None) -> list[dict]:
+        return self.list_holdings_paginated(status=status, limit=200, offset=0)
+
+    def list_holdings_paginated(self, status: str | None = None, limit: int = 200, offset: int = 0) -> list[dict]:
+        limit = max(1, min(limit, 500))
+        offset = max(0, offset)
         query = """
             SELECT h.id, h.ammo_id, ai.name AS ammo_name, h.purchase_price, h.purchased_at,
                    h.status, h.threshold_pct, h.sold_at, h.updated_at
@@ -237,7 +255,8 @@ class Database:
         if status:
             query += " WHERE h.status = ? "
             params.append(status)
-        query += " ORDER BY h.id DESC;"
+        query += " ORDER BY h.id DESC LIMIT ? OFFSET ?;"
+        params.extend([limit, offset])
         with self.connection() as conn:
             rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
@@ -419,8 +438,9 @@ class Database:
             ).fetchone()
             return dict(row) if row else None
 
-    def list_alert_events(self, limit: int = 50, unread_only: bool = False) -> list[dict]:
+    def list_alert_events(self, limit: int = 50, unread_only: bool = False, offset: int = 0) -> list[dict]:
         limit = max(1, min(limit, 200))
+        offset = max(0, offset)
         query = """
             SELECT id, holding_id, ammo_id, current_price, threshold_pct, message, dedupe_key, is_read, created_at
             FROM price_alert_events
@@ -428,11 +448,89 @@ class Database:
         params: list[Any] = []
         if unread_only:
             query += " WHERE is_read = 0 "
-        query += " ORDER BY created_at DESC LIMIT ?;"
-        params.append(limit)
+        query += " ORDER BY created_at DESC LIMIT ? OFFSET ?;"
+        params.extend([limit, offset])
         with self.connection() as conn:
             rows = conn.execute(query, params).fetchall()
             return [dict(row) for row in rows]
+
+    def get_latest_price_details_map(self) -> dict[str, dict[str, Any]]:
+        rows = self.get_latest_prices()
+        return {
+            str(row["id"]): {
+                "price": float(row["price"]),
+                "recorded_at": str(row["recorded_at"]),
+            }
+            for row in rows
+        }
+
+    def get_change_ranking(self, days: int = 7, limit: int = 3) -> dict[str, list[dict[str, Any]]]:
+        days = max(1, min(days, 365))
+        limit = max(1, min(limit, 20))
+        start = (datetime.now(UTC) - timedelta(days=days)).replace(tzinfo=None, microsecond=0).isoformat()
+        with self.connection() as conn:
+            gainers_rows = conn.execute(
+                """
+                WITH scoped AS (
+                    SELECT
+                        ammo_id,
+                        price,
+                        ROW_NUMBER() OVER (PARTITION BY ammo_id ORDER BY recorded_at ASC) AS rn_asc,
+                        ROW_NUMBER() OVER (PARTITION BY ammo_id ORDER BY recorded_at DESC) AS rn_desc
+                    FROM price_history
+                    WHERE recorded_at >= ?
+                ),
+                agg AS (
+                    SELECT
+                        ammo_id,
+                        MAX(CASE WHEN rn_asc = 1 THEN price END) AS first_price,
+                        MAX(CASE WHEN rn_desc = 1 THEN price END) AS last_price
+                    FROM scoped
+                    GROUP BY ammo_id
+                    HAVING first_price > 0
+                )
+                SELECT ai.id AS ammo_id, ai.name, agg.first_price, agg.last_price,
+                       (agg.last_price - agg.first_price) / agg.first_price AS pct
+                FROM agg
+                JOIN ammo_info ai ON ai.id = agg.ammo_id
+                ORDER BY pct DESC
+                LIMIT ?;
+                """,
+                (start, limit),
+            ).fetchall()
+            losers_rows = conn.execute(
+                """
+                WITH scoped AS (
+                    SELECT
+                        ammo_id,
+                        price,
+                        ROW_NUMBER() OVER (PARTITION BY ammo_id ORDER BY recorded_at ASC) AS rn_asc,
+                        ROW_NUMBER() OVER (PARTITION BY ammo_id ORDER BY recorded_at DESC) AS rn_desc
+                    FROM price_history
+                    WHERE recorded_at >= ?
+                ),
+                agg AS (
+                    SELECT
+                        ammo_id,
+                        MAX(CASE WHEN rn_asc = 1 THEN price END) AS first_price,
+                        MAX(CASE WHEN rn_desc = 1 THEN price END) AS last_price
+                    FROM scoped
+                    GROUP BY ammo_id
+                    HAVING first_price > 0
+                )
+                SELECT ai.id AS ammo_id, ai.name, agg.first_price, agg.last_price,
+                       (agg.last_price - agg.first_price) / agg.first_price AS pct
+                FROM agg
+                JOIN ammo_info ai ON ai.id = agg.ammo_id
+                ORDER BY pct ASC
+                LIMIT ?;
+                """,
+                (start, limit),
+            ).fetchall()
+        return {
+            "gainers": [dict(row) for row in gainers_rows],
+            "losers": [dict(row) for row in losers_rows],
+        }
 
     def mark_alerts_read(self, event_ids: list[int] | None = None) -> int:
         with self.connection() as conn:
@@ -488,3 +586,22 @@ class Database:
         exists = any(row["name"] == column for row in columns)
         if not exists:
             conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {column_type};")
+
+    def _get_latest_prices_cache(self, ttl_seconds: int) -> list[dict] | None:
+        with self._latest_prices_cache_lock:
+            pair = self._latest_prices_cache
+            if not pair:
+                return None
+            saved_at, payload = pair
+            if (datetime.now(UTC) - saved_at).total_seconds() > ttl_seconds:
+                self._latest_prices_cache = None
+                return None
+            return [dict(row) for row in payload]
+
+    def _set_latest_prices_cache(self, payload: list[dict]) -> None:
+        with self._latest_prices_cache_lock:
+            self._latest_prices_cache = (datetime.now(UTC), [dict(row) for row in payload])
+
+    def _invalidate_latest_prices_cache(self) -> None:
+        with self._latest_prices_cache_lock:
+            self._latest_prices_cache = None

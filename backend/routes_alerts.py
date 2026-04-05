@@ -47,8 +47,9 @@ def evaluate_alerts() -> tuple:
 def list_alert_events() -> tuple:
     service = current_app.extensions["alert_service"]
     limit = request.args.get("limit", default=50, type=int)
+    offset = request.args.get("offset", default=0, type=int)
     unread_only = request.args.get("unread_only", "false").lower() in {"1", "true", "yes", "on"}
-    rows = service.list_events(limit=limit, unread_only=unread_only)
+    rows = service.list_events(limit=limit, unread_only=unread_only, offset=offset)
     return jsonify({"code": "OK", "message": "ok", "data": {"items": rows, "count": len(rows)}}), 200
 
 

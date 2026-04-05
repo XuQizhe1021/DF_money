@@ -1,11 +1,13 @@
 import { request } from "../client";
 export const holdingsApi = {
-    list(includeSold = false) {
+    list(includeSold = false, limit = 100, offset = 0) {
         return request({
             url: "/api/holdings",
             method: "GET",
             params: {
                 include_sold: includeSold,
+                limit,
+                offset,
             },
         });
     },

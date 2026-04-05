@@ -19,6 +19,10 @@ const editForm = reactive({
 });
 const formError = ref("");
 const isSubmitLocked = computed(() => holdingsStore.submitting);
+const selectedAmmoLatestPrice = computed(() => {
+    const found = marketStore.latestItems.find((item) => item.id === form.ammo_id);
+    return found ? Number(found.price) : null;
+});
 const validatePrice = (value) => {
     const num = Number(value);
     return Number.isFinite(num) && num >= 0;
@@ -36,6 +40,14 @@ const loadData = async () => {
         notificationStore.push("error", holdingsStore.error);
     }
 };
+const fillCurrentPrice = () => {
+    if (selectedAmmoLatestPrice.value === null) {
+        formError.value = "当前子弹缺少现价，请先刷新行情后重试";
+        return;
+    }
+    form.purchase_price = selectedAmmoLatestPrice.value.toFixed(2);
+    formError.value = "";
+};
 const createHolding = async () => {
     formError.value = "";
     if (!form.ammo_id) {
@@ -43,7 +55,7 @@ const createHolding = async () => {
         return;
     }
     if (!validatePrice(form.purchase_price)) {
-        formError.value = "购买价格必须是大于等于0的数字";
+        formError.value = "购买价格必须是大于等于0的数字，可使用“按现价填充”快速设置";
         return;
     }
     if (!validateThreshold(form.threshold_pct)) {
@@ -161,6 +173,11 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
 (__VLS_ctx.form.purchase_price);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+    value: (__VLS_ctx.selectedAmmoLatestPrice === null ? '-' : __VLS_ctx.selectedAmmoLatestPrice.toFixed(2)),
+    disabled: true,
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
     type: "number",
     min: "0",
     max: "10",
@@ -169,6 +186,11 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
 (__VLS_ctx.form.threshold_pct);
 __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
     ...{ class: "row" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+    ...{ onClick: (__VLS_ctx.fillCurrentPrice) },
+    ...{ class: "btn ghost" },
+    disabled: (__VLS_ctx.isSubmitLocked),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ onClick: (__VLS_ctx.createHolding) },
@@ -360,6 +382,8 @@ else {
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
 /** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
 /** @type {__VLS_StyleScopedClasses['error-text']} */ ;
 /** @type {__VLS_StyleScopedClasses['card']} */ ;
 /** @type {__VLS_StyleScopedClasses['row']} */ ;
@@ -394,7 +418,9 @@ const __VLS_self = (await import('vue')).defineComponent({
             editForm: editForm,
             formError: formError,
             isSubmitLocked: isSubmitLocked,
+            selectedAmmoLatestPrice: selectedAmmoLatestPrice,
             loadData: loadData,
+            fillCurrentPrice: fillCurrentPrice,
             createHolding: createHolding,
             startEdit: startEdit,
             saveEdit: saveEdit,

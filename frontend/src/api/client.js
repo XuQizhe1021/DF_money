@@ -1,4 +1,5 @@
 import axios from "axios";
+import { useNotificationStore } from "../stores/notification";
 const client = axios.create({
     baseURL: import.meta.env.VITE_API_BASE_URL ?? "",
     timeout: 10000,
@@ -29,6 +30,7 @@ export async function request(config, options = {}) {
     const timeout = options.timeoutMs ?? 10000;
     let attempt = 0;
     let lastError;
+    // 统一请求入口：超时、重试、异常归一化都在此处理，避免页面重复实现。
     while (attempt <= retryTimes) {
         try {
             const response = await client.request({
@@ -45,9 +47,13 @@ export async function request(config, options = {}) {
             if (attempt >= retryTimes || !isRetryable(error)) {
                 break;
             }
+            // 使用线性退避降低接口抖动时的瞬时请求压力。
             await sleep(retryDelayMs * (attempt + 1));
         }
         attempt += 1;
     }
-    throw new Error(normalizeErrorMessage(lastError));
+    const message = normalizeErrorMessage(lastError);
+    const notificationStore = useNotificationStore();
+    notificationStore.push("error", message);
+    throw new Error(message);
 }

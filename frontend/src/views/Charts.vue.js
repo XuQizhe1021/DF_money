@@ -8,6 +8,7 @@ const chartRef = ref(null);
 const selectedAmmoId = ref("");
 const selectedDays = ref(7);
 let chart = null;
+let refreshTimer = null;
 const ensureChart = async () => {
     await nextTick();
     if (!chartRef.value) {
@@ -25,17 +26,22 @@ const renderChart = () => {
     const yData = marketStore.historyItems.map((item) => item.price);
     chart.setOption({
         tooltip: { trigger: "axis" },
+        grid: { left: 40, right: 20, top: 20, bottom: 50 },
         xAxis: { type: "category", data: xData },
         yAxis: { type: "value" },
+        dataZoom: xData.length > 120 ? [{ type: "inside" }, { type: "slider" }] : [],
         series: [
             {
                 name: "价格",
                 type: "line",
                 smooth: true,
+                showSymbol: false,
+                sampling: "lttb",
+                animation: false,
                 data: yData,
             },
         ],
-    });
+    }, { lazyUpdate: true });
 };
 const refreshHistory = async () => {
     if (!selectedAmmoId.value) {
@@ -48,9 +54,19 @@ const refreshHistory = async () => {
     }
     renderChart();
 };
+const scheduleRefresh = () => {
+    if (refreshTimer !== null) {
+        window.clearTimeout(refreshTimer);
+    }
+    // 通过轻量防抖合并快速切换触发，避免短时间重复请求。
+    refreshTimer = window.setTimeout(async () => {
+        refreshTimer = null;
+        await refreshHistory();
+    }, 180);
+};
 const ammoOptions = computed(() => marketStore.ammoOptions);
 watch(() => [selectedAmmoId.value, selectedDays.value], async () => {
-    await refreshHistory();
+    scheduleRefresh();
 });
 onMounted(async () => {
     await marketStore.fetchLatest();
@@ -63,6 +79,10 @@ const onResize = () => {
     chart?.resize();
 };
 onBeforeUnmount(() => {
+    if (refreshTimer !== null) {
+        window.clearTimeout(refreshTimer);
+        refreshTimer = null;
+    }
     window.removeEventListener("resize", onResize);
     chart?.dispose();
     chart = null;

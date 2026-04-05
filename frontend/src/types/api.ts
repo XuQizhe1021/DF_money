@@ -32,6 +32,21 @@ export interface HistoryData {
   items: HistoryItem[];
 }
 
+export interface ChangeRankingItem {
+  ammo_id: string;
+  name: string;
+  first_price: number;
+  last_price: number;
+  pct: number;
+}
+
+export interface ChangeRankingData {
+  days: number;
+  limit: number;
+  gainers: ChangeRankingItem[];
+  losers: ChangeRankingItem[];
+}
+
 export interface AnalysisResult {
   price_position: string;
   action: string;

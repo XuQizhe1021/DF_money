@@ -13,4 +13,11 @@ export const marketApi = {
             params: { days },
         }, { retry: 2 });
     },
+    getChangeRanking(days = 7, limit = 3) {
+        return request({
+            url: "/api/ammo/change-ranking",
+            method: "GET",
+            params: { days, limit },
+        }, { retry: 1 });
+    },
 };

@@ -6,13 +6,20 @@ export const useHoldingsStore = defineStore("holdings", {
         loading: false,
         submitting: false,
         error: "",
+        page: 1,
+        pageSize: 100,
     }),
     actions: {
-        async fetchList(includeSold = false) {
+        async fetchList(includeSold = false, page, pageSize) {
             this.loading = true;
             this.error = "";
+            const resolvedPage = page ?? this.page;
+            const resolvedPageSize = pageSize ?? this.pageSize;
+            this.page = Math.max(1, resolvedPage);
+            this.pageSize = Math.max(1, Math.min(resolvedPageSize, 200));
             try {
-                const resp = await holdingsApi.list(includeSold);
+                const offset = (this.page - 1) * this.pageSize;
+                const resp = await holdingsApi.list(includeSold, this.pageSize, offset);
                 this.items = resp.data.items;
             }
             catch (error) {

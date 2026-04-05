@@ -10,6 +10,7 @@ interface MarketState {
   errorLatest: string;
   errorHistory: string;
   updatedAt: string;
+  historyCache: Record<string, { items: HistoryItem[]; savedAt: number }>;
 }
 
 export const useMarketStore = defineStore("market", {
@@ -21,6 +22,7 @@ export const useMarketStore = defineStore("market", {
     errorLatest: "",
     errorHistory: "",
     updatedAt: "",
+    historyCache: {},
   }),
   getters: {
     ammoOptions: (state) =>
@@ -43,12 +45,25 @@ export const useMarketStore = defineStore("market", {
         this.loadingLatest = false;
       }
     },
-    async fetchHistory(ammoId: string, days: number) {
+    async fetchHistory(ammoId: string, days: number, forceRefresh = false) {
       this.loadingHistory = true;
       this.errorHistory = "";
+      const cacheKey = `${ammoId}:${days}`;
       try {
+        // 历史数据短缓存：降低频繁切换筛选时的重复请求，提升图表响应速度。
+        if (!forceRefresh) {
+          const cached = this.historyCache[cacheKey];
+          if (cached && Date.now() - cached.savedAt <= 30_000) {
+            this.historyItems = cached.items;
+            return;
+          }
+        }
         const resp = await marketApi.getHistory(ammoId, days);
         this.historyItems = resp.data.items;
+        this.historyCache[cacheKey] = {
+          items: resp.data.items,
+          savedAt: Date.now(),
+        };
       } catch (error) {
         this.errorHistory = error instanceof Error ? error.message : "获取历史数据失败";
         this.historyItems = [];

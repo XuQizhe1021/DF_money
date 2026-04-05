@@ -25,10 +25,11 @@ class HoldingService:
         )
         return self._attach_profit(created)
 
-    def list(self, include_sold: bool = False) -> list[dict[str, Any]]:
+    def list(self, include_sold: bool = False, limit: int = 100, offset: int = 0) -> list[dict[str, Any]]:
         status = None if include_sold else "holding"
-        rows = self.db.list_holdings(status=status)
-        return [self._attach_profit(row) for row in rows]
+        rows = self.db.list_holdings_paginated(status=status, limit=limit, offset=offset)
+        latest_map = self.db.get_latest_price_details_map()
+        return [self._attach_profit_with_latest(row, latest_map.get(str(row["ammo_id"]))) for row in rows]
 
     def update(
         self,
@@ -67,6 +68,10 @@ class HoldingService:
 
     def _attach_profit(self, holding: dict[str, Any]) -> dict[str, Any]:
         latest = self.db.get_latest_price(holding["ammo_id"])
+        return self._attach_profit_with_latest(holding, latest)
+
+    @staticmethod
+    def _attach_profit_with_latest(holding: dict[str, Any], latest: dict[str, Any] | None) -> dict[str, Any]:
         result = dict(holding)
         if not latest:
             result["latest_price"] = None

@@ -23,6 +23,10 @@ const editForm = reactive({
 
 const formError = ref("");
 const isSubmitLocked = computed(() => holdingsStore.submitting);
+const selectedAmmoLatestPrice = computed(() => {
+  const found = marketStore.latestItems.find((item) => item.id === form.ammo_id);
+  return found ? Number(found.price) : null;
+});
 
 const validatePrice = (value: string) => {
   const num = Number(value);
@@ -44,6 +48,15 @@ const loadData = async () => {
   }
 };
 
+const fillCurrentPrice = () => {
+  if (selectedAmmoLatestPrice.value === null) {
+    formError.value = "当前子弹缺少现价，请先刷新行情后重试";
+    return;
+  }
+  form.purchase_price = selectedAmmoLatestPrice.value.toFixed(2);
+  formError.value = "";
+};
+
 const createHolding = async () => {
   formError.value = "";
   if (!form.ammo_id) {
@@ -51,7 +64,7 @@ const createHolding = async () => {
     return;
   }
   if (!validatePrice(form.purchase_price)) {
-    formError.value = "购买价格必须是大于等于0的数字";
+    formError.value = "购买价格必须是大于等于0的数字，可使用“按现价填充”快速设置";
     return;
   }
   if (!validateThreshold(form.threshold_pct)) {
@@ -153,11 +166,16 @@ onMounted(async () => {
           <input v-model="form.purchase_price" type="number" min="0" step="0.01" />
         </label>
         <label>
+          现价参考
+          <input :value="selectedAmmoLatestPrice === null ? '-' : selectedAmmoLatestPrice.toFixed(2)" disabled />
+        </label>
+        <label>
           提醒阈值
           <input v-model="form.threshold_pct" type="number" min="0" max="10" step="0.01" />
         </label>
       </div>
       <div class="row">
+        <button class="btn ghost" :disabled="isSubmitLocked" @click="fillCurrentPrice">按现价填充</button>
         <button class="btn" :disabled="isSubmitLocked" @click="createHolding">
           {{ holdingsStore.submitting ? "提交中..." : "新增持仓" }}
         </button>

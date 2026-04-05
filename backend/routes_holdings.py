@@ -32,7 +32,9 @@ def create_holding() -> tuple:
 def list_holdings() -> tuple:
     service = current_app.extensions["holding_service"]
     include_sold = request.args.get("include_sold", "false").lower() in {"1", "true", "yes", "on"}
-    rows = service.list(include_sold=include_sold)
+    limit = request.args.get("limit", default=100, type=int)
+    offset = request.args.get("offset", default=0, type=int)
+    rows = service.list(include_sold=include_sold, limit=limit, offset=offset)
     return jsonify({"code": "OK", "message": "ok", "data": {"items": rows, "count": len(rows)}}), 200
 
 

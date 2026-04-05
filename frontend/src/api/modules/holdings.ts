@@ -14,12 +14,14 @@ interface UpdateHoldingPayload {
 }
 
 export const holdingsApi = {
-  list(includeSold = false) {
+  list(includeSold = false, limit = 100, offset = 0) {
     return request<ApiResponse<HoldingListData>>({
       url: "/api/holdings",
       method: "GET",
       params: {
         include_sold: includeSold,
+        limit,
+        offset,
       },
     });
   },

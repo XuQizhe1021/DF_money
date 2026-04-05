@@ -1,5 +1,5 @@
 import { request } from "../client";
-import type { ApiResponse, AmmoLatestData, HistoryData } from "../../types/api";
+import type { ApiResponse, AmmoLatestData, ChangeRankingData, HistoryData } from "../../types/api";
 
 export const marketApi = {
   getLatest() {
@@ -19,6 +19,16 @@ export const marketApi = {
         params: { days },
       },
       { retry: 2 }
+    );
+  },
+  getChangeRanking(days = 7, limit = 3) {
+    return request<ApiResponse<ChangeRankingData>>(
+      {
+        url: "/api/ammo/change-ranking",
+        method: "GET",
+        params: { days, limit },
+      },
+      { retry: 1 }
     );
   },
 };

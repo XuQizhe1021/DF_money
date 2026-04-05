@@ -1,10 +1,20 @@
-# 三角洲行动子弹行情分析系统（阶段3）
+# 三角洲行动子弹行情分析系统（M4 可交付版）
 
-本仓库已完成 M3“前端开发”：在阶段2后端能力基础上，新增 Vue3 前端看板与交互闭环，覆盖行情、走势、AI建议、持仓与通知提醒。系统仅做行情分析与辅助决策，不登录账号、不执行自动交易、默认不上传云端数据。
+本仓库已完成 M4“集成测试与优化”：在阶段1~3功能基础上，完成全链路验证、性能优化、UI/UX优化、交付文档与本地构建脚本。系统仅做行情分析与辅助决策，不登录账号、不执行自动交易、默认不上传云端数据。
 
 ## 技术选型
 
 后端使用 Flask + APScheduler + SQLite，HTTP 调用使用 requests。AI 适配层默认兼容 OpenAI Chat Completions 格式，可接 DeepSeek / OpenAI / Claude 兼容网关。
+
+## 版本亮点（M4）
+
+- 全流程集成测试覆盖正常流、异常流、边界流并形成报告
+- 新增涨跌榜聚合接口，前端请求从N次降为1次
+- 持仓与提醒列表支持分页参数，持仓盈亏计算路径优化
+- 最新价热点查询增加短TTL缓存，降低重复SQL压力
+- 图表渲染与交互优化（缓存、防抖、长序列采样）
+- 新增用户手册、API接入教程、性能报告、发布说明
+- 新增本地一键构建脚本 `scripts/build_local.ps1`
 
 ## 目录结构
 
@@ -37,9 +47,18 @@ database/
 scripts/
   init_db.py
   test_api.py
+  build_local.ps1
+  build_local.bat
 tests/
   test_api.py
   test_fetcher.py
+  test_integration_m4.py
+docs/
+  test-report.md
+  performance-report.md
+  user-guide.md
+  api-integration-guide.md
+  release-notes.md
 ```
 
 ## 环境准备
@@ -75,11 +94,28 @@ npm run dev
 
 默认地址 `http://localhost:5173`，开发环境会将 `/api` 代理到后端 `http://127.0.0.1:5000`。
 
+## 一键构建与质量门禁（M4）
+
+PowerShell：
+
+```bash
+powershell -ExecutionPolicy Bypass -File .\scripts\build_local.ps1
+```
+
+批处理：
+
+```bash
+.\scripts\build_local.bat
+```
+
+脚本会顺序执行后端依赖安装、pytest、前端依赖安装、typecheck、build。
+
 ## 基础接口
 
 - `GET /health`
 - `GET /api/ammo/latest`
 - `GET /api/ammo/<ammo_id>/history?days=7`
+- `GET /api/ammo/change-ranking?days=7&limit=3`
 - `POST /api/tasks/fetch-now`
 
 ## 阶段2新增接口
@@ -124,7 +160,7 @@ npm run dev
 ### 持仓管理
 
 - `POST /api/holdings` 新增持仓
-- `GET /api/holdings?include_sold=false` 持仓列表（含实时盈亏估算）
+- `GET /api/holdings?include_sold=false&limit=100&offset=0` 持仓列表（含实时盈亏估算）
 - `PATCH /api/holdings/<id>` 更新成本价或阈值
 - `POST /api/holdings/<id>/sell` 标记卖出
 - `DELETE /api/holdings/<id>` 删除持仓
@@ -161,7 +197,7 @@ npm run dev
 - `GET /api/alerts/config` 读取提醒配置
 - `PUT /api/alerts/config` 更新全局阈值/冷却时间/控制台提醒开关
 - `POST /api/alerts/evaluate` 手动触发一次监控检查
-- `GET /api/alerts/events?unread_only=true` 获取页面通知数据
+- `GET /api/alerts/events?unread_only=true&limit=50&offset=0` 获取页面通知数据
 - `POST /api/alerts/read` 标记提醒已读
 
 请求示例：
@@ -219,3 +255,17 @@ pytest -q
 ```
 
 当前新增测试覆盖 AI 回退/缓存、持仓 CRUD 与盈亏、提醒触发与冷却防抖、非法参数与异常路径。
+
+## 文档入口（M4）
+
+- 集成测试报告：`docs/test-report.md`
+- 性能优化报告：`docs/performance-report.md`
+- 用户手册：`docs/user-guide.md`
+- API接入教程：`docs/api-integration-guide.md`
+- 发布说明：`docs/release-notes.md`
+
+## 免责声明
+
+- 本项目仅用于学习与辅助分析，不构成投资建议
+- 用户应自行承担第三方API服务可用性与费用
+- 请勿在日志、截图、文档中暴露任何密钥与敏感配置
