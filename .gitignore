@@ -34,3 +34,7 @@ database/*.log
 .coverage
 coverage.xml
 htmlcov/
+
+# Frontend
+frontend/node_modules/
+frontend/dist/

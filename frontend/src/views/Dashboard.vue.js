@@ -1,0 +1,273 @@
+import { computed, onMounted, ref } from "vue";
+import { alertsApi } from "../api/modules/alerts";
+import { marketApi } from "../api/modules/market";
+import PriceTable from "../components/PriceTable.vue";
+import { useMarketStore } from "../stores/market";
+import { useNotificationStore } from "../stores/notification";
+const marketStore = useMarketStore();
+const notificationStore = useNotificationStore();
+const checkingAlerts = ref(false);
+const changeLoading = ref(false);
+const changeError = ref("");
+const gainers = ref([]);
+const losers = ref([]);
+const topGain = computed(() => {
+    if (!marketStore.latestItems.length) {
+        return null;
+    }
+    return [...marketStore.latestItems].sort((a, b) => b.price - a.price)[0];
+});
+const topLoss = computed(() => {
+    if (!marketStore.latestItems.length) {
+        return null;
+    }
+    return [...marketStore.latestItems].sort((a, b) => a.price - b.price)[0];
+});
+const refresh = async () => {
+    await marketStore.fetchLatest();
+    if (marketStore.errorLatest) {
+        notificationStore.push("error", marketStore.errorLatest);
+        return;
+    }
+    notificationStore.push("success", "行情已刷新");
+    await loadChangeRanking();
+};
+const loadChangeRanking = async () => {
+    changeLoading.value = true;
+    changeError.value = "";
+    try {
+        const candidates = marketStore.latestItems.slice(0, 12);
+        // 使用并发请求计算7日涨跌幅，限制样本数量保证页面响应。
+        const result = await Promise.all(candidates.map(async (item) => {
+            const resp = await marketApi.getHistory(item.id, 7);
+            const points = resp.data.items;
+            if (points.length < 2) {
+                return null;
+            }
+            const first = Number(points[0].price);
+            const last = Number(points[points.length - 1].price);
+            if (!Number.isFinite(first) || first <= 0) {
+                return null;
+            }
+            return {
+                ammoId: item.id,
+                name: item.name,
+                pct: (last - first) / first,
+            };
+        }));
+        const valid = result
+            .filter((item) => item !== null)
+            .sort((a, b) => b.pct - a.pct);
+        gainers.value = valid.slice(0, 3);
+        losers.value = [...valid].reverse().slice(0, 3);
+    }
+    catch (error) {
+        changeError.value = error instanceof Error ? error.message : "涨跌幅计算失败";
+    }
+    finally {
+        changeLoading.value = false;
+    }
+};
+const checkAlerts = async () => {
+    if (checkingAlerts.value) {
+        return;
+    }
+    checkingAlerts.value = true;
+    try {
+        await alertsApi.evaluate();
+        const eventsResp = await alertsApi.getEvents(true);
+        const events = eventsResp.data.items;
+        if (!events.length) {
+            notificationStore.push("info", "当前无新的提醒事件");
+            return;
+        }
+        events.forEach((event) => {
+            notificationStore.push("warning", event.message);
+            notificationStore.sendBrowserNotification("价格提醒", event.message);
+        });
+        await alertsApi.markRead(events.map((item) => item.id));
+    }
+    catch (error) {
+        notificationStore.push("error", error instanceof Error ? error.message : "提醒检查失败");
+    }
+    finally {
+        checkingAlerts.value = false;
+    }
+};
+onMounted(async () => {
+    await refresh();
+    await checkAlerts();
+});
+debugger; /* PartiallyEnd: #3632/scriptSetup.vue */
+const __VLS_ctx = {};
+let __VLS_components;
+let __VLS_directives;
+__VLS_asFunctionalElement(__VLS_intrinsicElements.section, __VLS_intrinsicElements.section)({
+    ...{ class: "stack" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "row" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "card" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+if (__VLS_ctx.topGain) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    (__VLS_ctx.topGain.name);
+    (__VLS_ctx.topGain.price.toFixed(2));
+}
+else {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+}
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "card" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+if (__VLS_ctx.topLoss) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+    (__VLS_ctx.topLoss.name);
+    (__VLS_ctx.topLoss.price.toFixed(2));
+}
+else {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+}
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "card" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+(__VLS_ctx.marketStore.updatedAt || "-");
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "card actions" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+    ...{ onClick: (__VLS_ctx.refresh) },
+    ...{ class: "btn" },
+    disabled: (__VLS_ctx.marketStore.loadingLatest),
+});
+(__VLS_ctx.marketStore.loadingLatest ? "加载中..." : "刷新行情");
+__VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
+    ...{ onClick: (__VLS_ctx.checkAlerts) },
+    ...{ class: "btn ghost" },
+    disabled: (__VLS_ctx.checkingAlerts),
+});
+(__VLS_ctx.checkingAlerts ? "检查中..." : "检查提醒");
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "row" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "card" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+if (__VLS_ctx.changeLoading) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+}
+else if (__VLS_ctx.changeError) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "error" },
+    });
+    (__VLS_ctx.changeError);
+}
+else if (__VLS_ctx.gainers.length === 0) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+}
+for (const [item] of __VLS_getVForSourceType((__VLS_ctx.gainers))) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        key: (item.ammoId),
+    });
+    (item.name);
+    ((item.pct * 100).toFixed(2));
+}
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "card" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.h3, __VLS_intrinsicElements.h3)({});
+if (__VLS_ctx.changeLoading) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+}
+else if (__VLS_ctx.changeError) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        ...{ class: "error" },
+    });
+    (__VLS_ctx.changeError);
+}
+else if (__VLS_ctx.losers.length === 0) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({});
+}
+for (const [item] of __VLS_getVForSourceType((__VLS_ctx.losers))) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
+        key: (item.ammoId),
+    });
+    (item.name);
+    ((item.pct * 100).toFixed(2));
+}
+if (__VLS_ctx.marketStore.loadingLatest) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "card" },
+    });
+}
+else if (__VLS_ctx.marketStore.errorLatest) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "card error" },
+    });
+    (__VLS_ctx.marketStore.errorLatest);
+}
+else if (__VLS_ctx.marketStore.latestItems.length === 0) {
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+        ...{ class: "card" },
+    });
+}
+else {
+    /** @type {[typeof PriceTable, ]} */ ;
+    // @ts-ignore
+    const __VLS_0 = __VLS_asFunctionalComponent(PriceTable, new PriceTable({
+        rows: (__VLS_ctx.marketStore.latestItems),
+    }));
+    const __VLS_1 = __VLS_0({
+        rows: (__VLS_ctx.marketStore.latestItems),
+    }, ...__VLS_functionalComponentArgsRest(__VLS_0));
+}
+/** @type {__VLS_StyleScopedClasses['stack']} */ ;
+/** @type {__VLS_StyleScopedClasses['row']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['actions']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['btn']} */ ;
+/** @type {__VLS_StyleScopedClasses['ghost']} */ ;
+/** @type {__VLS_StyleScopedClasses['row']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['error']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['error']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+/** @type {__VLS_StyleScopedClasses['error']} */ ;
+/** @type {__VLS_StyleScopedClasses['card']} */ ;
+var __VLS_dollars;
+const __VLS_self = (await import('vue')).defineComponent({
+    setup() {
+        return {
+            PriceTable: PriceTable,
+            marketStore: marketStore,
+            checkingAlerts: checkingAlerts,
+            changeLoading: changeLoading,
+            changeError: changeError,
+            gainers: gainers,
+            losers: losers,
+            topGain: topGain,
+            topLoss: topLoss,
+            refresh: refresh,
+            checkAlerts: checkAlerts,
+        };
+    },
+});
+export default (await import('vue')).defineComponent({
+    setup() {
+        return {};
+    },
+});
+; /* PartiallyEnd: #4569/main.vue */

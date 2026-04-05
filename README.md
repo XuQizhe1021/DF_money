@@ -1,6 +1,6 @@
-# 三角洲行动子弹行情分析系统（阶段2）
+# 三角洲行动子弹行情分析系统（阶段3）
 
-本仓库已完成 M2“核心功能开发”：在阶段1抓取与入库能力基础上，新增 AI 分析、持仓管理、价格监控提醒、统一错误处理与关键测试覆盖。系统仅做行情分析与辅助决策，不登录账号、不执行自动交易、默认不上传云端数据。
+本仓库已完成 M3“前端开发”：在阶段2后端能力基础上，新增 Vue3 前端看板与交互闭环，覆盖行情、走势、AI建议、持仓与通知提醒。系统仅做行情分析与辅助决策，不登录账号、不执行自动交易、默认不上传云端数据。
 
 ## 技术选型
 
@@ -25,6 +25,14 @@ backend/
   holding_service.py
   alert_service.py
   price_monitor.py
+frontend/
+  src/
+    views/
+    components/
+    api/
+    stores/
+  package.json
+  README.md
 database/
 scripts/
   init_db.py
@@ -56,6 +64,16 @@ python -m backend.app
 ```
 
 默认地址 `http://127.0.0.1:5000`。
+
+## 前端启动（M3）
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+默认地址 `http://localhost:5173`，开发环境会将 `/api` 代理到后端 `http://127.0.0.1:5000`。
 
 ## 基础接口
 
