@@ -26,6 +26,10 @@ __VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.d
 __VLS_asFunctionalElement(__VLS_intrinsicElements.header, __VLS_intrinsicElements.header)({
     ...{ class: "topbar" },
 });
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({
+    ...{ class: "topbar-main" },
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.div, __VLS_intrinsicElements.div)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.h1, __VLS_intrinsicElements.h1)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
     ...{ class: "sub" },
@@ -63,6 +67,7 @@ const __VLS_4 = __VLS_asFunctionalComponent(NotificationBar, new NotificationBar
 const __VLS_5 = __VLS_4({}, ...__VLS_functionalComponentArgsRest(__VLS_4));
 /** @type {__VLS_StyleScopedClasses['layout']} */ ;
 /** @type {__VLS_StyleScopedClasses['topbar']} */ ;
+/** @type {__VLS_StyleScopedClasses['topbar-main']} */ ;
 /** @type {__VLS_StyleScopedClasses['sub']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav']} */ ;
 /** @type {__VLS_StyleScopedClasses['nav-btn']} */ ;

@@ -78,6 +78,7 @@ export interface DataSourceConfigData {
   api_ammo_endpoint: string;
   openid: string;
   access_token: string;
+  fetch_interval_hours: number;
   has_openid: boolean;
   has_access_token: boolean;
 }

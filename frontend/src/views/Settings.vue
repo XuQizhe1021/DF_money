@@ -24,6 +24,7 @@ const dsForm = reactive({
   api_ammo_endpoint: "",
   openid: "",
   access_token: "",
+  fetch_interval_hours: 1,
   has_openid: false,
   has_access_token: false,
 });
@@ -43,6 +44,7 @@ const loadConfig = async () => {
     dsForm.api_ammo_endpoint = dsResp.data.api_ammo_endpoint || "";
     dsForm.openid = "";
     dsForm.access_token = "";
+    dsForm.fetch_interval_hours = Number(dsResp.data.fetch_interval_hours || 1);
     dsForm.has_openid = !!dsResp.data.has_openid;
     dsForm.has_access_token = !!dsResp.data.has_access_token;
   } catch (error) {
@@ -79,6 +81,7 @@ const saveDataSourceConfig = async () => {
     const resp = await settingsApi.updateDataSourceConfig({
       api_base_url: dsForm.api_base_url,
       api_ammo_endpoint: dsForm.api_ammo_endpoint,
+      fetch_interval_hours: dsForm.fetch_interval_hours,
       ...(dsForm.openid ? { openid: dsForm.openid } : {}),
       ...(dsForm.access_token ? { access_token: dsForm.access_token } : {}),
     });
@@ -139,6 +142,10 @@ onMounted(async () => {
         <label>
           access_token
           <input v-model="dsForm.access_token" placeholder="粘贴你的access_token（可选）" />
+        </label>
+        <label>
+          自动抓取间隔（小时）
+          <input v-model.number="dsForm.fetch_interval_hours" type="number" min="1" max="168" />
         </label>
       </div>
       <p class="subline">

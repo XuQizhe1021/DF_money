@@ -1,5 +1,6 @@
 import * as echarts from "echarts";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { settingsApi } from "../api/modules/settings";
 import { useMarketStore } from "../stores/market";
 import { useNotificationStore } from "../stores/notification";
 const marketStore = useMarketStore();
@@ -7,10 +8,18 @@ const notificationStore = useNotificationStore();
 const chartRef = ref(null);
 const deltaChartRef = ref(null);
 const selectedAmmoId = ref("");
-const selectedDays = ref(7);
+const selectedWindowHours = ref(168);
+const fetchIntervalHours = ref(1);
 let chart = null;
 let deltaChart = null;
 let refreshTimer = null;
+const toAxisLabel = (value) => {
+    const text = value.replace("T", " ");
+    if (fetchIntervalHours.value <= 6) {
+        return text.slice(5, 16);
+    }
+    return text.slice(0, 16);
+};
 const ensureChart = async () => {
     await nextTick();
     if (!chartRef.value) {
@@ -32,7 +41,7 @@ const renderChart = () => {
     chart.setOption({
         tooltip: { trigger: "axis" },
         grid: { left: 40, right: 20, top: 20, bottom: 50 },
-        xAxis: { type: "category", data: xData },
+        xAxis: { type: "category", data: xData, axisLabel: { formatter: toAxisLabel, rotate: 20 } },
         yAxis: { type: "value" },
         dataZoom: xData.length > 120 ? [{ type: "inside" }, { type: "slider" }] : [],
         series: [
@@ -63,7 +72,7 @@ const renderDeltaChart = () => {
     deltaChart.setOption({
         tooltip: { trigger: "axis" },
         grid: { left: 40, right: 20, top: 20, bottom: 56 },
-        xAxis: { type: "category", data: labels, axisLabel: { interval: 0, rotate: 20 } },
+        xAxis: { type: "category", data: labels, axisLabel: { interval: 0, rotate: 20, formatter: toAxisLabel } },
         yAxis: { type: "value" },
         series: [
             {
@@ -82,10 +91,19 @@ const refreshHistory = async () => {
     if (!selectedAmmoId.value) {
         return;
     }
-    await marketStore.fetchHistory(selectedAmmoId.value, selectedDays.value);
+    const requestDays = Math.max(1, Math.ceil(selectedWindowHours.value / 24));
+    await marketStore.fetchHistory(selectedAmmoId.value, requestDays);
     if (marketStore.errorHistory) {
         notificationStore.push("error", marketStore.errorHistory);
         return;
+    }
+    if (marketStore.historyItems.length > 0) {
+        const latestAt = new Date(marketStore.historyItems[marketStore.historyItems.length - 1].recorded_at).getTime();
+        const minTime = latestAt - selectedWindowHours.value * 3600000;
+        marketStore.historyItems = marketStore.historyItems.filter((item) => {
+            const ts = new Date(item.recorded_at).getTime();
+            return Number.isFinite(ts) && ts >= minTime;
+        });
     }
     renderChart();
     renderDeltaChart();
@@ -104,10 +122,18 @@ const scheduleRefresh = () => {
     }, 180);
 };
 const ammoOptions = computed(() => marketStore.ammoOptions);
-watch(() => [selectedAmmoId.value, selectedDays.value], async () => {
+watch(() => [selectedAmmoId.value, selectedWindowHours.value], async () => {
     scheduleRefresh();
 });
 onMounted(async () => {
+    try {
+        const dsResp = await settingsApi.getDataSourceConfig();
+        fetchIntervalHours.value = Math.max(1, Number(dsResp.data.fetch_interval_hours || 1));
+        selectedWindowHours.value = Math.max(24, fetchIntervalHours.value * 24);
+    }
+    catch {
+        fetchIntervalHours.value = 1;
+    }
     await marketStore.fetchLatest();
     selectedAmmoId.value = marketStore.latestItems[0]?.id ?? "";
     await ensureChart();
@@ -156,13 +182,19 @@ for (const [item] of __VLS_getVForSourceType((__VLS_ctx.ammoOptions))) {
 }
 __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
 __VLS_asFunctionalElement(__VLS_intrinsicElements.select, __VLS_intrinsicElements.select)({
-    value: (__VLS_ctx.selectedDays),
+    value: (__VLS_ctx.selectedWindowHours),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-    value: (7),
+    value: (24),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
-    value: (30),
+    value: (72),
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+    value: (168),
+});
+__VLS_asFunctionalElement(__VLS_intrinsicElements.option, __VLS_intrinsicElements.option)({
+    value: (720),
 });
 __VLS_asFunctionalElement(__VLS_intrinsicElements.button, __VLS_intrinsicElements.button)({
     ...{ onClick: (__VLS_ctx.refreshHistory) },
@@ -229,7 +261,7 @@ const __VLS_self = (await import('vue')).defineComponent({
             chartRef: chartRef,
             deltaChartRef: deltaChartRef,
             selectedAmmoId: selectedAmmoId,
-            selectedDays: selectedDays,
+            selectedWindowHours: selectedWindowHours,
             refreshHistory: refreshHistory,
             ammoOptions: ammoOptions,
         };

@@ -26,20 +26,24 @@ const go = (path: string) => {
 <template>
   <div class="layout">
     <header class="topbar">
-      <h1>三角洲行动子弹行情分析系统</h1>
-      <p class="sub">仅做行情展示与分析，不涉及账号行为与自动交易</p>
+      <div class="topbar-main">
+        <div>
+          <h1>三角洲行动子弹行情分析系统</h1>
+          <p class="sub">仅做行情展示与分析，不涉及账号行为与自动交易</p>
+        </div>
+        <nav class="nav">
+          <button
+            v-for="item in menus"
+            :key="item.path"
+            class="nav-btn"
+            :class="{ active: route.path === item.path }"
+            @click="go(item.path)"
+          >
+            {{ item.label }}
+          </button>
+        </nav>
+      </div>
     </header>
-    <nav class="nav">
-      <button
-        v-for="item in menus"
-        :key="item.path"
-        class="nav-btn"
-        :class="{ active: route.path === item.path }"
-        @click="go(item.path)"
-      >
-        {{ item.label }}
-      </button>
-    </nav>
     <main class="main">
       <section class="page-header">
         <h2>{{ title }}</h2>

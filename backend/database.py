@@ -404,13 +404,17 @@ class Database:
             "api_ammo_endpoint": "",
             "openid": "",
             "access_token": "",
+            "fetch_interval_hours": 1,
         }
         with self.connection() as conn:
             rows = conn.execute("SELECT key, value FROM data_source_config;").fetchall()
         for row in rows:
             key = str(row["key"])
             if key in defaults:
-                defaults[key] = str(row["value"])
+                if key in {"fetch_interval_hours"}:
+                    defaults[key] = int(row["value"])
+                else:
+                    defaults[key] = str(row["value"])
         return defaults
 
     def set_data_source_config(self, config: dict[str, Any]) -> dict[str, Any]:
@@ -611,6 +615,7 @@ class Database:
                 "api_ammo_endpoint": "",
                 "openid": "",
                 "access_token": "",
+                "fetch_interval_hours": "1",
             },
         }
         for table, config in defaults.items():

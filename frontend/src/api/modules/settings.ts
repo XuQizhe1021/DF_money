@@ -6,6 +6,7 @@ interface UpdateDataSourcePayload {
   api_ammo_endpoint?: string;
   openid?: string;
   access_token?: string;
+  fetch_interval_hours?: number;
 }
 
 export const settingsApi = {

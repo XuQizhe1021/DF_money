@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import * as echarts from "echarts";
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { settingsApi } from "../api/modules/settings";
 import { useMarketStore } from "../stores/market";
 import { useNotificationStore } from "../stores/notification";
 
@@ -9,10 +10,19 @@ const notificationStore = useNotificationStore();
 const chartRef = ref<HTMLElement | null>(null);
 const deltaChartRef = ref<HTMLElement | null>(null);
 const selectedAmmoId = ref("");
-const selectedDays = ref<7 | 30>(7);
+const selectedWindowHours = ref(168);
+const fetchIntervalHours = ref(1);
 let chart: echarts.ECharts | null = null;
 let deltaChart: echarts.ECharts | null = null;
 let refreshTimer: number | null = null;
+
+const toAxisLabel = (value: string) => {
+  const text = value.replace("T", " ");
+  if (fetchIntervalHours.value <= 6) {
+    return text.slice(5, 16);
+  }
+  return text.slice(0, 16);
+};
 
 const ensureChart = async () => {
   await nextTick();
@@ -36,7 +46,7 @@ const renderChart = () => {
   chart.setOption({
     tooltip: { trigger: "axis" },
     grid: { left: 40, right: 20, top: 20, bottom: 50 },
-    xAxis: { type: "category", data: xData },
+    xAxis: { type: "category", data: xData, axisLabel: { formatter: toAxisLabel, rotate: 20 } },
     yAxis: { type: "value" },
     dataZoom: xData.length > 120 ? [{ type: "inside" }, { type: "slider" }] : [],
     series: [
@@ -68,7 +78,7 @@ const renderDeltaChart = () => {
   deltaChart.setOption({
     tooltip: { trigger: "axis" },
     grid: { left: 40, right: 20, top: 20, bottom: 56 },
-    xAxis: { type: "category", data: labels, axisLabel: { interval: 0, rotate: 20 } },
+    xAxis: { type: "category", data: labels, axisLabel: { interval: 0, rotate: 20, formatter: toAxisLabel } },
     yAxis: { type: "value" },
     series: [
       {
@@ -88,10 +98,19 @@ const refreshHistory = async () => {
   if (!selectedAmmoId.value) {
     return;
   }
-  await marketStore.fetchHistory(selectedAmmoId.value, selectedDays.value);
+  const requestDays = Math.max(1, Math.ceil(selectedWindowHours.value / 24));
+  await marketStore.fetchHistory(selectedAmmoId.value, requestDays);
   if (marketStore.errorHistory) {
     notificationStore.push("error", marketStore.errorHistory);
     return;
+  }
+  if (marketStore.historyItems.length > 0) {
+    const latestAt = new Date(marketStore.historyItems[marketStore.historyItems.length - 1].recorded_at).getTime();
+    const minTime = latestAt - selectedWindowHours.value * 3600_000;
+    marketStore.historyItems = marketStore.historyItems.filter((item) => {
+      const ts = new Date(item.recorded_at).getTime();
+      return Number.isFinite(ts) && ts >= minTime;
+    });
   }
   renderChart();
   renderDeltaChart();
@@ -114,13 +133,20 @@ const scheduleRefresh = () => {
 const ammoOptions = computed(() => marketStore.ammoOptions);
 
 watch(
-  () => [selectedAmmoId.value, selectedDays.value],
+  () => [selectedAmmoId.value, selectedWindowHours.value],
   async () => {
     scheduleRefresh();
   }
 );
 
 onMounted(async () => {
+  try {
+    const dsResp = await settingsApi.getDataSourceConfig();
+    fetchIntervalHours.value = Math.max(1, Number(dsResp.data.fetch_interval_hours || 1));
+    selectedWindowHours.value = Math.max(24, fetchIntervalHours.value * 24);
+  } catch {
+    fetchIntervalHours.value = 1;
+  }
   await marketStore.fetchLatest();
   selectedAmmoId.value = marketStore.latestItems[0]?.id ?? "";
   await ensureChart();
@@ -159,10 +185,12 @@ onBeforeUnmount(() => {
         </select>
       </label>
       <label>
-        时间范围
-        <select v-model.number="selectedDays">
-          <option :value="7">7日</option>
-          <option :value="30">30日</option>
+        观察窗口（小时）
+        <select v-model.number="selectedWindowHours">
+          <option :value="24">24小时</option>
+          <option :value="72">72小时</option>
+          <option :value="168">168小时（7天）</option>
+          <option :value="720">720小时（30天）</option>
         </select>
       </label>
       <button class="btn" :disabled="marketStore.loadingHistory" @click="refreshHistory">

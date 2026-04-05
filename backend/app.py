@@ -33,6 +33,12 @@ def create_app(settings: Settings | None = None) -> Flask:
     logger = _build_logger(settings)
     db = Database(settings.db_path)
     db.init_schema()
+    data_source_config = db.get_data_source_config()
+    fetch_interval_hours = int(
+        data_source_config.get("fetch_interval_hours")
+        or max(1, settings.fetch_interval_minutes // 60 or 1)
+    )
+    db.set_data_source_config({"fetch_interval_hours": fetch_interval_hours})
     fetcher = DataFetcher(settings, db=db)
     service = IngestionService(db=db, fetcher=fetcher, logger=logger)
     holding_service = HoldingService(db=db)
@@ -52,7 +58,7 @@ def create_app(settings: Settings | None = None) -> Flask:
     app.extensions["alert_service"] = alert_service
     app.extensions["ai_analyzer"] = ai_analyzer
     app.extensions["price_monitor"] = price_monitor
-    app.extensions["scheduler"] = _build_scheduler(settings, service, price_monitor)
+    app.extensions["scheduler"] = _build_scheduler(settings, service, price_monitor, fetch_interval_hours)
     _register_error_handlers(app, logger)
     return app
 
@@ -74,7 +80,10 @@ def _build_logger(settings: Settings) -> logging.Logger:
 
 
 def _build_scheduler(
-    settings: Settings, service: IngestionService, price_monitor: PriceMonitor
+    settings: Settings,
+    service: IngestionService,
+    price_monitor: PriceMonitor,
+    fetch_interval_hours: int,
 ) -> BackgroundScheduler | None:
     if not settings.scheduler_enabled:
         return None
@@ -82,7 +91,7 @@ def _build_scheduler(
     scheduler.add_job(
         service.ingest_once,
         trigger="interval",
-        minutes=settings.fetch_interval_minutes,
+        hours=max(1, fetch_interval_hours),
         id="ammo_fetch_job",
         max_instances=1,
         replace_existing=True,

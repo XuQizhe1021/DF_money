@@ -78,7 +78,39 @@ class DataFetcher:
                     raise FetcherError(f"远端服务错误: status={response.status_code}")
                 if response.status_code >= 400:
                     raise FetcherError(f"请求参数或鉴权错误: status={response.status_code}")
-                return response.json()
+                body = response.json()
+                if not isinstance(body, dict):
+                    return body
+                total_pages_raw = body.get("total_pages", body.get("totalPages"))
+                current_page_raw = body.get("page", body.get("current_page", body.get("currentPage", 1)))
+                if total_pages_raw is None:
+                    return body
+                try:
+                    total_pages = int(total_pages_raw)
+                    current_page = int(current_page_raw)
+                except (TypeError, ValueError):
+                    return body
+                if total_pages <= current_page:
+                    return body
+                merged = self._extract_records(body)
+                if not isinstance(merged, list):
+                    return body
+                for page in range(current_page + 1, min(total_pages, 200) + 1):
+                    extra_params = dict(params)
+                    extra_params["page"] = str(page)
+                    page_response = requests.get(
+                        url,
+                        timeout=self.settings.request_timeout_seconds,
+                        headers=headers or None,
+                        params=extra_params,
+                    )
+                    if page_response.status_code >= 400:
+                        break
+                    page_body = page_response.json()
+                    page_items = self._extract_records(page_body)
+                    if isinstance(page_items, list) and page_items:
+                        merged.extend(page_items)
+                return merged
             except requests.Timeout as exc:
                 last_exception = exc
             except requests.RequestException as exc:
@@ -87,19 +119,25 @@ class DataFetcher:
                 time.sleep(self.settings.request_retry_backoff_seconds * attempt)
         raise FetcherError(f"请求失败: {last_exception}")
 
-    def _resolve_data_source_config(self) -> dict[str, str]:
+    def _resolve_data_source_config(self) -> dict[str, Any]:
         if not self.db:
             return {}
         return self.db.get_data_source_config()
 
-    def _normalize(self, payload: Any, source: str) -> list[dict]:
+    @staticmethod
+    def _extract_records(payload: Any) -> list[dict] | Any:
         if isinstance(payload, dict):
             records = payload.get("data", payload.get("items", payload.get("list", payload)))
             if isinstance(records, dict):
-                records = [records]
-        elif isinstance(payload, list):
-            records = payload
-        else:
+                return [records]
+            return records
+        if isinstance(payload, list):
+            return payload
+        return payload
+
+    def _normalize(self, payload: Any, source: str) -> list[dict]:
+        records = self._extract_records(payload)
+        if not isinstance(records, list):
             records = []
         normalized: list[dict] = []
         for item in records:

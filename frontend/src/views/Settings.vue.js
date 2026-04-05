@@ -20,6 +20,7 @@ const dsForm = reactive({
     api_ammo_endpoint: "",
     openid: "",
     access_token: "",
+    fetch_interval_hours: 1,
     has_openid: false,
     has_access_token: false,
 });
@@ -38,6 +39,7 @@ const loadConfig = async () => {
         dsForm.api_ammo_endpoint = dsResp.data.api_ammo_endpoint || "";
         dsForm.openid = "";
         dsForm.access_token = "";
+        dsForm.fetch_interval_hours = Number(dsResp.data.fetch_interval_hours || 1);
         dsForm.has_openid = !!dsResp.data.has_openid;
         dsForm.has_access_token = !!dsResp.data.has_access_token;
     }
@@ -76,6 +78,7 @@ const saveDataSourceConfig = async () => {
         const resp = await settingsApi.updateDataSourceConfig({
             api_base_url: dsForm.api_base_url,
             api_ammo_endpoint: dsForm.api_ammo_endpoint,
+            fetch_interval_hours: dsForm.fetch_interval_hours,
             ...(dsForm.openid ? { openid: dsForm.openid } : {}),
             ...(dsForm.access_token ? { access_token: dsForm.access_token } : {}),
         });
@@ -161,6 +164,13 @@ else if (__VLS_ctx.section === 'datasource') {
         placeholder: "粘贴你的access_token（可选）",
     });
     (__VLS_ctx.dsForm.access_token);
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.label, __VLS_intrinsicElements.label)({});
+    __VLS_asFunctionalElement(__VLS_intrinsicElements.input)({
+        type: "number",
+        min: "1",
+        max: "168",
+    });
+    (__VLS_ctx.dsForm.fetch_interval_hours);
     __VLS_asFunctionalElement(__VLS_intrinsicElements.p, __VLS_intrinsicElements.p)({
         ...{ class: "subline" },
     });
