@@ -33,7 +33,9 @@ def test_health(tmp_path: Path) -> None:
     client = app.test_client()
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.get_json()["status"] == "ok"
+    body = response.get_json()
+    assert body["code"] == "OK"
+    assert body["data"]["status"] == "ok"
 
 
 def test_fetch_latest_and_history(tmp_path: Path) -> None:
@@ -44,10 +46,10 @@ def test_fetch_latest_and_history(tmp_path: Path) -> None:
     latest_response = client.get("/api/ammo/latest")
     latest_body = latest_response.get_json()
     assert latest_response.status_code == 200
-    assert latest_body["count"] >= 1
-    ammo_id = latest_body["items"][0]["id"]
+    assert latest_body["data"]["count"] >= 1
+    ammo_id = latest_body["data"]["items"][0]["id"]
     history_response = client.get(f"/api/ammo/{ammo_id}/history?days=7")
     history_body = history_response.get_json()
     assert history_response.status_code == 200
-    assert history_body["ammo_id"] == ammo_id
-    assert len(history_body["items"]) >= 1
+    assert history_body["data"]["ammo_id"] == ammo_id
+    assert len(history_body["data"]["items"]) >= 1
